@@ -15,6 +15,14 @@ if config.config_file_name:
 target_metadata = Base.metadata
 
 
+def include_object(obj, name, type_, reflected, compare_to):
+    # MLflow shares this Postgres database; restrict autogenerate to our own
+    # tables so it never proposes dropping MLflow's tables (runs, metrics, ...).
+    if type_ == "table" and name not in target_metadata.tables:
+        return False
+    return True
+
+
 def run_migrations_online():
     connectable = engine_from_config(
         config.get_section(config.config_ini_section),
@@ -22,7 +30,11 @@ def run_migrations_online():
         poolclass=pool.NullPool,
     )
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            include_object=include_object,
+        )
         with context.begin_transaction():
             context.run_migrations()
 
