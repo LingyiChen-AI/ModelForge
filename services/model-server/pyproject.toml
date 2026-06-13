@@ -3,7 +3,8 @@ name = "modelforge-model-server"
 version = "0.1.0"
 requires-python = ">=3.10"
 dependencies = ["fastapi>=0.111", "uvicorn[standard]>=0.30", "mlflow>=2.16",
-  "transformers>=4.44", "torch>=2.2"]
+  "transformers>=4.44,<5", "torch>=2.2", "sentence-transformers>=3.0",
+  "boto3>=1.34", "pydantic-settings>=2.2"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8.0", "httpx>=0.27"]
