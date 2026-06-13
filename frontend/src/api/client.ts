@@ -20,3 +20,9 @@ export type ModelVersion = { id: number; name: string; mlflow_version: string; t
 export const listJobs = () => api.get<TrainingJob[]>("/training-jobs").then(r => r.data);
 export const createJob = (b: any) => api.post<TrainingJob>("/training-jobs", b).then(r => r.data);
 export const listModelVersions = () => api.get<ModelVersion[]>("/model-versions").then(r => r.data);
+
+export type EvalRun = { id: number; model_version_id: number; dataset_version_id: number; status: string; results: Record<string, number>; error: string | null };
+export const listEvalRuns = (datasetVersionId?: number) =>
+  api.get<EvalRun[]>("/eval-runs", { params: datasetVersionId ? { dataset_version_id: datasetVersionId } : {} }).then(r => r.data);
+export const createEvalRun = (b: { model_version_id: number; dataset_version_id: number }) =>
+  api.post<EvalRun>("/eval-runs", b).then(r => r.data);
