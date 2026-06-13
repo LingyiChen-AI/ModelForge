@@ -14,3 +14,6 @@ app.include_router(training.router)
 
 from app.api import models
 app.include_router(models.router)
+
+from app.api import eval as eval_api
+app.include_router(eval_api.router)
