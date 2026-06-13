@@ -1,5 +1,5 @@
 import io, pandas as pd
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.db import get_db
@@ -30,7 +30,7 @@ def _read_upload(file: UploadFile) -> pd.DataFrame:
 
 @router.post("/{dataset_id}/versions", response_model=DatasetVersionOut, status_code=201)
 def upload_version(dataset_id: int, file: UploadFile = File(...),
-                   note: str = "", db: Session = Depends(get_db)):
+                   note: str = Form(""), db: Session = Depends(get_db)):
     ds = db.get(Dataset, dataset_id)
     if not ds:
         raise HTTPException(404, "dataset not found")
