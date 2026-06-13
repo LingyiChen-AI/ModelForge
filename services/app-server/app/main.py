@@ -8,3 +8,6 @@ def health():
 
 from app.api import datasets
 app.include_router(datasets.router)
+
+from app.api import training
+app.include_router(training.router)
