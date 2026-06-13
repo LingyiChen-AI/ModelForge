@@ -9,5 +9,6 @@ class Settings(BaseSettings):
     s3_secret_key: str = "minioadmin"
     s3_bucket_datasets: str = "datasets"
     mlflow_tracking_uri: str = "http://localhost:5000"
+    model_server_url: str = "http://localhost:8001"
 
 settings = Settings()

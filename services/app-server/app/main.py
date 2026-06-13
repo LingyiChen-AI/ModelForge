@@ -17,3 +17,6 @@ app.include_router(models.router)
 
 from app.api import eval as eval_api
 app.include_router(eval_api.router)
+
+from app.api import deployment
+app.include_router(deployment.router)
