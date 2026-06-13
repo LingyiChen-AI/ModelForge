@@ -55,3 +55,18 @@ class EvalRun(Base, TimestampMixin):
     results: Mapped[dict] = mapped_column(JSON, default=dict)
     per_sample_uri: Mapped[str | None] = mapped_column(nullable=True)
     error: Mapped[str | None] = mapped_column(nullable=True)
+
+
+class Deployment(Base, TimestampMixin):
+    __tablename__ = "deployments"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    model_version_id: Mapped[int] = mapped_column(
+        ForeignKey("model_versions.id")
+    )
+    endpoint: Mapped[str | None] = mapped_column(nullable=True)
+    mode: Mapped[str] = mapped_column(default="online")
+    status: Mapped[str] = mapped_column(default="pending")
+    replicas: Mapped[int] = mapped_column(default=1)
+    config: Mapped[dict] = mapped_column(JSON, default=dict)
+    error: Mapped[str | None] = mapped_column(nullable=True)
