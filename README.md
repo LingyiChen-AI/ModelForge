@@ -10,7 +10,7 @@
 - **训练流程**:按 `task_type` 分流 recipe(分类已落地;NER / 句对 / embedding 微调规划中),实验与产物记录到 MLflow。
 - **评估流程**:对某模型版本 + 评估集版本发起评估,worker 加载已注册模型批量推理算指标,结果回写 `EvalRun`,可在同一评估集上横向对比多个模型版本(分类已落地)。
 - **模型版本管理**:复用 MLflow Model Registry,业务侧 `ModelVersion` 表镜像关键字段供查询与评估关联。
-- **在线部署**:model-server 从 Registry 拉权重提供推理 API(规划中)。
+- **在线部署**:一键把模型版本部署到 model-server,从 Registry 拉权重加载,按 task_type 暴露 `/predict`(分类/NER)、`/embed`(向量)、`/similarity`(句对);app-server 提供部署管理(创建/列表/停止)。
 
 支持的任务类型:
 
@@ -131,6 +131,11 @@ cd services/model-server && pytest -q
 | `POST` | `/eval-runs` | 发起评估(模型版本 + 评估集版本) |
 | `GET` | `/eval-runs?dataset_version_id=` | 评估列表(可按评估集版本过滤做 Leaderboard) |
 | `GET` | `/eval-runs/{id}` | 查询评估状态与指标 |
+| `POST` | `/deployments` | 部署某模型版本(通知 model-server 加载) |
+| `GET` | `/deployments` | 部署列表 |
+| `POST` | `/deployments/{id}/stop` | 停止部署 |
+
+model-server(默认 `:8001`)推理端点:`POST /load`、`POST /predict`、`POST /embed`、`POST /similarity`、`GET /loaded`、`DELETE /loaded/{model_version_id}`。
 
 ## 路线图
 
@@ -139,9 +144,8 @@ cd services/model-server && pytest -q
 - **基础地基(phases 1–3)**:基础设施 + 三服务骨架、数据集与版本管理、classification 训练全链路(训练 → MLflow 注册 → 模型版本)。
 - **评估流程(phase 4)**:发起评估 → worker 加载已注册模型批量推理 → 指标回写 `EvalRun` → 同一评估集横向对比。
 - **全部 task_type recipe(phase 5)**:`classification` / `ner` / `pair` / `embedding`(含难负样本挖掘)训练 recipe 与对应评估器,接入 worker 的 `get_recipe`/`get_evaluator` 分流。
+- **在线部署(phase 6)**:`Deployment` 管理 + model-server 内存模型库,从 MLflow Registry 拉权重,按 task_type 暴露 `/predict` `/embed` `/similarity`。
 
-待实现:
+后续可做(均超出当前范围):per-sample 评估明细落盘、部署灰度/多副本、更细的 RBAC/配额、大数据集增量版本。
 
-- model-server 在线部署(`/predict` `/embed` `/similarity` + 部署管理)
-
-详见实现计划:[基础地基](docs/superpowers/plans/2026-06-13-modelforge-foundation.md)、[评估流程](docs/superpowers/plans/2026-06-13-modelforge-evaluation.md)、[recipes](docs/superpowers/plans/2026-06-13-modelforge-recipes.md)。
+详见实现计划:[基础地基](docs/superpowers/plans/2026-06-13-modelforge-foundation.md)、[评估流程](docs/superpowers/plans/2026-06-13-modelforge-evaluation.md)、[recipes](docs/superpowers/plans/2026-06-13-modelforge-recipes.md)、[在线部署](docs/superpowers/plans/2026-06-13-modelforge-deployment.md)。
