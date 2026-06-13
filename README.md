@@ -21,7 +21,7 @@
 | `pair` | 句对 / 语义相似度 | HF `Trainer` / CoSENT | Spearman / Pearson |
 | `embedding` | 检索向量模型微调(BGE / m3e / gte) | sentence-transformers / FlagEmbedding | recall@k / MRR / nDCG |
 
-> 当前仓库已落地 `classification` 全链路;其余 task_type 与在线部署见路线图。
+> 四类 task_type 的训练 recipe 与评估器均已落地;在线部署见路线图。
 
 ## 架构
 
@@ -137,11 +137,11 @@ cd services/model-server && pytest -q
 已完成:
 
 - **基础地基(phases 1–3)**:基础设施 + 三服务骨架、数据集与版本管理、classification 训练全链路(训练 → MLflow 注册 → 模型版本)。
-- **评估流程(phase 4)**:发起评估 → worker 加载已注册模型批量推理 → 指标回写 `EvalRun` → 同一评估集横向对比(classification)。
+- **评估流程(phase 4)**:发起评估 → worker 加载已注册模型批量推理 → 指标回写 `EvalRun` → 同一评估集横向对比。
+- **全部 task_type recipe(phase 5)**:`classification` / `ner` / `pair` / `embedding`(含难负样本挖掘)训练 recipe 与对应评估器,接入 worker 的 `get_recipe`/`get_evaluator` 分流。
 
 待实现:
 
-- `ner` / `pair` / `embedding` recipe + 评估器(embedding 含难负样本挖掘)
 - model-server 在线部署(`/predict` `/embed` `/similarity` + 部署管理)
 
-详见实现计划:[基础地基](docs/superpowers/plans/2026-06-13-modelforge-foundation.md)、[评估流程](docs/superpowers/plans/2026-06-13-modelforge-evaluation.md)。
+详见实现计划:[基础地基](docs/superpowers/plans/2026-06-13-modelforge-foundation.md)、[评估流程](docs/superpowers/plans/2026-06-13-modelforge-evaluation.md)、[recipes](docs/superpowers/plans/2026-06-13-modelforge-recipes.md)。
