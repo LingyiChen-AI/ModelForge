@@ -21,6 +21,7 @@ def test_train_task_orchestration(tmp_path, monkeypatch):
     captured = {}
     monkeypatch.setattr(tasks, "log_and_register",
                         lambda **k: captured.update(k) or ("run-1", "ModelForge-1", "3"))
+    monkeypatch.setattr(tasks, "report_result", lambda *a, **k: None)
 
     tasks.train_task.run(training_job_id=1)
 

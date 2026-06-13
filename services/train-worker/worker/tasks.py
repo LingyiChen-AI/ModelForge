@@ -1,4 +1,6 @@
 import json, tempfile
+import requests
+from worker.config import settings
 from worker.celery_app import celery_app
 from modelforge_common.task_names import TRAIN_TASK
 from modelforge_common.enums import JobStatus
@@ -11,6 +13,15 @@ from worker.mlflow_utils import log_and_register
 def run_recipe(task_type, df, base_model, hyperparams, output_dir):
     return get_recipe(task_type).train(df=df, base_model=base_model,
                                        hyperparams=hyperparams, output_dir=output_dir)
+
+
+def report_result(training_job_id: int, run_id: str, model_name: str,
+                  version: str, metrics: dict) -> None:
+    requests.post(
+        f"{settings.app_server_url}/training-jobs/internal/{training_job_id}/result",
+        json={"run_id": run_id, "model_name": model_name, "version": version,
+              "metrics": {k: float(v) for k, v in metrics.items()
+                          if isinstance(v, (int, float))}}, timeout=10)
 
 
 @celery_app.task(name=TRAIN_TASK, bind=True)
@@ -28,6 +39,10 @@ def train_task(self, training_job_id: int):
                 job_name=job["name"], base_model=job["base_model"], hyperparams=hp,
                 metrics=result.metrics, artifact_dir=result.artifact_dir)
         set_job_status(engine, training_job_id, JobStatus.SUCCEEDED, mlflow_run_id=run_id)
+        try:
+            report_result(training_job_id, run_id, model_name, version, result.metrics)
+        except Exception:
+            pass  # callback is best-effort; job already succeeded and is recorded in DB
         return {"run_id": run_id, "model_name": model_name, "version": version,
                 "metrics": result.metrics}
     except Exception as e:

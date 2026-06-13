@@ -11,3 +11,6 @@ app.include_router(datasets.router)
 
 from app.api import training
 app.include_router(training.router)
+
+from app.api import models
+app.include_router(models.router)
