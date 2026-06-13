@@ -14,3 +14,9 @@ export const uploadVersion = (id: number, file: File, note: string) => {
   const fd = new FormData(); fd.append("file", file); fd.append("note", note);
   return api.post<DatasetVersion>(`/datasets/${id}/versions`, fd).then(r => r.data);
 };
+
+export type TrainingJob = { id: number; name: string; status: string; error: string | null };
+export type ModelVersion = { id: number; name: string; mlflow_version: string; task_type: string; train_metrics: Record<string, number>; stage: string };
+export const listJobs = () => api.get<TrainingJob[]>("/training-jobs").then(r => r.data);
+export const createJob = (b: any) => api.post<TrainingJob>("/training-jobs", b).then(r => r.data);
+export const listModelVersions = () => api.get<ModelVersion[]>("/model-versions").then(r => r.data);
