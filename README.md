@@ -94,16 +94,14 @@ cd services/app-server && alembic upgrade head && cd -
 # app-server
 cd services/app-server && uvicorn app.main:app --port 8000 &
 
-# train-worker —— 注意:MLflow 上传产物到 MinIO 依赖进程环境里的 AWS 凭证
-cd services/train-worker
-set -a; source ../../.env; set +a            # 导出 AWS_*/MLFLOW_S3_ENDPOINT_URL 给 MLflow 的 boto3
-celery -A worker.celery_app worker -c 1 -l info &
+# train-worker(默认 MinIO 凭证开箱即用)
+cd services/train-worker && celery -A worker.celery_app worker -c 1 -l info &
 
 # 前端
 cd frontend && npm install && npm run dev
 ```
 
-> **关于 `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY`**:这是 AWS SDK 标准变量,供 **MLflow 内部的 boto3**(以及 mlflow server 容器)向 MinIO 的 `mlflow` 产物桶认证;与平台自有的 `S3_ACCESS_KEY`/`S3_SECRET_KEY`(访问 `datasets` 桶)是两套通道。worker 进程必须 export 这些变量,否则 `register_model` 上传产物会失败。
+> **关于 MLflow 访问 MinIO 的凭证**:MLflow 上传模型产物到 MinIO 的 `mlflow` 桶时,走的是 AWS SDK 标准变量(`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` / `MLFLOW_S3_ENDPOINT_URL`),与平台自有的 `S3_ACCESS_KEY`/`S3_SECRET_KEY`(访问 `datasets` 桶)是两套通道。worker 已在 `worker/mlflow_utils.py` 里**从自身配置显式设置**这些变量,因此无需手动 export;改用自定义凭证时,设置 worker 的 `S3_ACCESS_KEY`/`S3_SECRET_KEY`/`S3_ENDPOINT_URL`(环境变量或 `.env`)即可。
 
 ## 端到端冒烟
 
