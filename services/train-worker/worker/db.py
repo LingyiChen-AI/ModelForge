@@ -1,3 +1,5 @@
+import json
+
 from sqlalchemy import create_engine, text, Engine
 from modelforge_common.enums import JobStatus
 from worker.config import settings
@@ -31,4 +33,31 @@ def load_job(engine: Engine, job_id: int) -> dict:
             "v.storage_uri FROM training_jobs j "
             "JOIN dataset_versions v ON v.id = j.dataset_version_id "
             "WHERE j.id = :id"), {"id": job_id}).mappings().one()
+        return dict(row)
+
+
+def set_eval_status(engine: Engine, eval_run_id: int, status: JobStatus,
+                    results: dict | None = None, error: str | None = None) -> None:
+    """Update eval run status in the database with optional results and error."""
+    sets = ["status = :status"]
+    params = {"status": status.value, "id": eval_run_id}
+    if results is not None:
+        sets.append("results = :res")
+        params["res"] = json.dumps(results)
+    if error is not None:
+        sets.append("error = :err")
+        params["err"] = error
+    with engine.begin() as c:
+        c.execute(text(f"UPDATE eval_runs SET {', '.join(sets)} WHERE id = :id"), params)
+
+
+def load_eval_run(engine: Engine, eval_run_id: int) -> dict:
+    """Load eval run details from the database."""
+    with engine.connect() as c:
+        row = c.execute(text(
+            "SELECT r.id, m.mlflow_model_name, m.mlflow_version, m.task_type, "
+            "v.storage_uri, r.metric_config FROM eval_runs r "
+            "JOIN model_versions m ON m.id = r.model_version_id "
+            "JOIN dataset_versions v ON v.id = r.dataset_version_id "
+            "WHERE r.id = :id"), {"id": eval_run_id}).mappings().one()
         return dict(row)
