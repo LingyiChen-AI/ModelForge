@@ -37,3 +37,21 @@ class ModelVersion(Base, TimestampMixin):
     train_metrics: Mapped[dict] = mapped_column(JSON, default=dict)
     stage: Mapped[str] = mapped_column(default="none")
     artifact_uri: Mapped[str | None] = mapped_column(nullable=True)
+
+
+class EvalRun(Base, TimestampMixin):
+    __tablename__ = "eval_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    model_version_id: Mapped[int] = mapped_column(
+        ForeignKey("model_versions.id")
+    )
+    dataset_version_id: Mapped[int] = mapped_column(
+        ForeignKey("dataset_versions.id")
+    )
+    metric_config: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(default=JobStatus.PENDING.value)
+    celery_task_id: Mapped[str | None] = mapped_column(nullable=True)
+    results: Mapped[dict] = mapped_column(JSON, default=dict)
+    per_sample_uri: Mapped[str | None] = mapped_column(nullable=True)
+    error: Mapped[str | None] = mapped_column(nullable=True)
