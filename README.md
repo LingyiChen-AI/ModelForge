@@ -8,7 +8,7 @@
 
 - **数据集管理 + 版本管理**:训练集 / 评估集统一管理,每次提交生成不可变全量快照(parquet)落对象存储,带 checksum,保证训练可复现。
 - **训练流程**:按 `task_type` 分流 recipe(分类已落地;NER / 句对 / embedding 微调规划中),实验与产物记录到 MLflow。
-- **评估流程**:在 worker 内对评估集批量推理算指标(规划中,见 [路线图](#路线图))。
+- **评估流程**:对某模型版本 + 评估集版本发起评估,worker 加载已注册模型批量推理算指标,结果回写 `EvalRun`,可在同一评估集上横向对比多个模型版本(分类已落地)。
 - **模型版本管理**:复用 MLflow Model Registry,业务侧 `ModelVersion` 表镜像关键字段供查询与评估关联。
 - **在线部署**:model-server 从 Registry 拉权重提供推理 API(规划中)。
 
@@ -128,15 +128,20 @@ cd services/model-server && pytest -q
 | `POST` | `/training-jobs` | 提交训练任务 |
 | `GET` | `/training-jobs/{id}` | 查询任务状态 |
 | `GET` | `/model-versions` | 模型版本列表 |
+| `POST` | `/eval-runs` | 发起评估(模型版本 + 评估集版本) |
+| `GET` | `/eval-runs?dataset_version_id=` | 评估列表(可按评估集版本过滤做 Leaderboard) |
+| `GET` | `/eval-runs/{id}` | 查询评估状态与指标 |
 
 ## 路线图
 
-已完成(基础地基,phases 1–3):基础设施 + 三服务骨架、数据集与版本管理、classification 训练全链路(训练 → MLflow 注册 → 模型版本)。
+已完成:
+
+- **基础地基(phases 1–3)**:基础设施 + 三服务骨架、数据集与版本管理、classification 训练全链路(训练 → MLflow 注册 → 模型版本)。
+- **评估流程(phase 4)**:发起评估 → worker 加载已注册模型批量推理 → 指标回写 `EvalRun` → 同一评估集横向对比(classification)。
 
 待实现:
 
-- 评估流程执行(worker 内批量推理 + 指标 + Leaderboard)
-- `ner` / `pair` / `embedding` recipe(embedding 含难负样本挖掘)
+- `ner` / `pair` / `embedding` recipe + 评估器(embedding 含难负样本挖掘)
 - model-server 在线部署(`/predict` `/embed` `/similarity` + 部署管理)
 
-详见实现计划:[`docs/superpowers/plans/2026-06-13-modelforge-foundation.md`](docs/superpowers/plans/2026-06-13-modelforge-foundation.md)。
+详见实现计划:[基础地基](docs/superpowers/plans/2026-06-13-modelforge-foundation.md)、[评估流程](docs/superpowers/plans/2026-06-13-modelforge-evaluation.md)。
