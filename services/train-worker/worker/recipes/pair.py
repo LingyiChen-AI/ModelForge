@@ -1,0 +1,39 @@
+import numpy as np
+from datasets import Dataset as HFDataset
+from transformers import (AutoTokenizer, AutoModelForSequenceClassification,
+                          TrainingArguments, Trainer, DataCollatorWithPadding)
+from worker.recipes.base import Recipe, TrainResult
+
+def _targets(df):
+    if "score" in df.columns:
+        return df["score"].astype(float).tolist()
+    labels = sorted(df["label"].unique().tolist())
+    l2i = {l: i for i, l in enumerate(labels)}
+    return df["label"].map(l2i).astype(float).tolist()
+
+class PairRecipe(Recipe):
+    def train(self, df, base_model, hyperparams, output_dir) -> TrainResult:
+        max_len = int(hyperparams.get("max_length", 128))
+        tok = AutoTokenizer.from_pretrained(base_model)
+        data = df.assign(labels=_targets(df))
+        def enc(b): return tok(b["text_a"], b["text_b"], truncation=True, max_length=max_len)
+        hf = HFDataset.from_pandas(data[["text_a", "text_b", "labels"]])
+        hf = hf.map(enc, batched=True, remove_columns=["text_a", "text_b"])
+        model = AutoModelForSequenceClassification.from_pretrained(base_model, num_labels=1)
+        def metrics_fn(p):
+            preds = p[0].reshape(-1); y = p[1].reshape(-1)
+            return {"mse": float(np.mean((preds - y) ** 2))}
+        args = TrainingArguments(output_dir=output_dir,
+            num_train_epochs=int(hyperparams.get("epochs", 3)),
+            per_device_train_batch_size=int(hyperparams.get("batch_size", 16)),
+            per_device_eval_batch_size=int(hyperparams.get("batch_size", 16)),
+            learning_rate=float(hyperparams.get("lr", 5e-5)),
+            report_to=[], logging_steps=10, save_strategy="no")
+        trainer = Trainer(model=model, args=args, train_dataset=hf, eval_dataset=hf,
+                          compute_metrics=metrics_fn,
+                          data_collator=DataCollatorWithPadding(tok))
+        trainer.train()
+        metrics = {k.replace("eval_", ""): float(v) for k, v in trainer.evaluate().items()
+                   if isinstance(v, (int, float))}
+        trainer.save_model(output_dir); tok.save_pretrained(output_dir)
+        return TrainResult(metrics=metrics, artifact_dir=output_dir, label_names=[])
