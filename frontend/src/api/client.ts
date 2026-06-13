@@ -26,3 +26,9 @@ export const listEvalRuns = (datasetVersionId?: number) =>
   api.get<EvalRun[]>("/eval-runs", { params: datasetVersionId ? { dataset_version_id: datasetVersionId } : {} }).then(r => r.data);
 export const createEvalRun = (b: { model_version_id: number; dataset_version_id: number }) =>
   api.post<EvalRun>("/eval-runs", b).then(r => r.data);
+
+export type Deployment = { id: number; model_version_id: number; status: string; endpoint: string | null; error: string | null };
+export const listDeployments = () => api.get<Deployment[]>("/deployments").then(r => r.data);
+export const createDeployment = (model_version_id: number) =>
+  api.post<Deployment>("/deployments", { model_version_id }).then(r => r.data);
+export const stopDeployment = (id: number) => api.post<Deployment>(`/deployments/${id}/stop`, {}).then(r => r.data);

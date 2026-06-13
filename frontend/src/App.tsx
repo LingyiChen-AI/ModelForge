@@ -3,6 +3,7 @@ import { DatasetDetailPage } from "./pages/DatasetDetailPage";
 import { TrainingPage } from "./pages/TrainingPage";
 import { ModelsPage } from "./pages/ModelsPage";
 import { EvalPage } from "./pages/EvalPage";
+import { DeployPage } from "./pages/DeployPage";
 
 export default function App() {
   const path = window.location.pathname;
@@ -12,10 +13,11 @@ export default function App() {
   else if (path === "/training") page = <TrainingPage />;
   else if (path === "/models") page = <ModelsPage />;
   else if (path === "/eval") page = <EvalPage />;
+  else if (path === "/deploy") page = <DeployPage />;
   return (
     <div>
       <nav style={{ display: "flex", gap: 12, marginBottom: 16 }}>
-        <a href="/">数据集</a><a href="/training">训练</a><a href="/models">模型</a><a href="/eval">评估</a>
+        <a href="/">数据集</a><a href="/training">训练</a><a href="/models">模型</a><a href="/eval">评估</a><a href="/deploy">部署</a>
       </nav>
       {page}
     </div>
