@@ -2,6 +2,19 @@ import axios from "axios";
 
 export const api = axios.create({ baseURL: import.meta.env.VITE_API_URL ?? "http://localhost:8000" });
 
+api.interceptors.request.use(cfg => {
+  const t = localStorage.getItem("mf_token");
+  if (t) cfg.headers.Authorization = `Bearer ${t}`;
+  return cfg;
+});
+api.interceptors.response.use(r => r, err => {
+  if (err.response?.status === 401) {
+    localStorage.removeItem("mf_token");
+    if (location.pathname !== "/login") location.href = "/login";
+  }
+  return Promise.reject(err);
+});
+
 export type Dataset = { id: number; name: string; kind: string; task_type: string };
 export type DatasetVersion = { id: number; version_no: number; row_count: number; checksum: string; note: string };
 
