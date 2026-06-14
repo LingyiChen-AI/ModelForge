@@ -38,8 +38,8 @@ def delete_role(db: Session, role_id: int) -> None:
     r = db.get(Role, role_id)
     if not r:
         raise ValueError("role not found")
-    if r.is_system:
-        raise PermissionError("system role cannot be deleted")
+    if r.is_builtin:
+        raise PermissionError("built-in role cannot be deleted")
     in_use = db.execute(select(User).where(User.role_id == role_id)).first()
     if in_use:
         raise ValueError("role is assigned to users")

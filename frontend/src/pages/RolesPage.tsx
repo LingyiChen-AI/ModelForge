@@ -60,7 +60,9 @@ export function RolesPage() {
             <td>
               <div className="flex items-center gap-2">
                 <span className="font-medium text-slate-800">{r.name}</span>
-                {r.is_system && <Badge tone="gray"><Lock size={10} /> 系统</Badge>}
+                {r.is_system
+                  ? <Badge tone="gray"><Lock size={10} /> 系统</Badge>
+                  : r.is_builtin && <Badge tone="gray"><Lock size={10} /> 内置</Badge>}
               </div>
             </td>
             <td><Badge tone={r.data_scope === "all" ? "blue" : "gray"}>{r.data_scope}</Badge></td>
@@ -72,7 +74,7 @@ export function RolesPage() {
               </div>
             </td>
             <td className="text-right">
-              {!r.is_system && (
+              {!r.is_builtin && (
                 <Button size="sm" variant="danger" onClick={() => deleteRole(r.id).then(reload).catch(() => alert("删除失败(可能被用户引用)"))}>
                   <Trash2 size={13} />
                 </Button>

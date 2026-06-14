@@ -37,6 +37,7 @@ def seed(db: Session) -> None:
         if not r:
             r = Role(name=name, description=desc, data_scope=scope, is_system=is_sys)
             db.add(r); db.flush()
+        r.is_builtin = True   # all seeded roles are built-in (not deletable)
         r.permissions = [by_code[c] for c in codes]
     db.flush()
     superadmin = db.execute(select(Role).where(Role.name == "superadmin")).scalar_one()

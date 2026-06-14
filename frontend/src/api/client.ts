@@ -47,7 +47,7 @@ export const createDeployment = (model_version_id: number) =>
 export const stopDeployment = (id: number) => api.post<Deployment>(`/deployments/${id}/stop`, {}).then(r => r.data);
 
 export type AdminUser = { id: number; name: string; email: string; role_id: number | null; is_active: boolean };
-export type Role = { id: number; name: string; description: string; data_scope: string; is_system: boolean; permissions: string[] };
+export type Role = { id: number; name: string; description: string; data_scope: string; is_system: boolean; is_builtin: boolean; permissions: string[] };
 export type Permission = { code: string; description: string };
 export const listUsers = () => api.get<AdminUser[]>("/users").then(r => r.data);
 export const createUser = (b: { name: string; email: string; password: string; role_id: number | null }) => api.post<AdminUser>("/users", b).then(r => r.data);

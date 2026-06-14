@@ -39,6 +39,7 @@ class RoleOut(BaseModel):
     description: str
     data_scope: str
     is_system: bool
+    is_builtin: bool
     permissions: list[str]
 
 class PermissionOut(BaseModel):

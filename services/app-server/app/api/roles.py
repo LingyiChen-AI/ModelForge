@@ -12,7 +12,7 @@ router = APIRouter(tags=["roles"])
 
 def _role_out(r: Role) -> RoleOut:
     return RoleOut(id=r.id, name=r.name, description=r.description,
-                   data_scope=r.data_scope, is_system=r.is_system,
+                   data_scope=r.data_scope, is_system=r.is_system, is_builtin=r.is_builtin,
                    permissions=sorted(p.code for p in r.permissions))
 
 @router.get("/permissions", response_model=list[PermissionOut])

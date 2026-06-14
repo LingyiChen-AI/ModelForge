@@ -28,7 +28,8 @@ class Role(Base, TimestampMixin):
     name: Mapped[str] = mapped_column(unique=True)
     description: Mapped[str] = mapped_column(default="")
     data_scope: Mapped[str] = mapped_column(default="own")
-    is_system: Mapped[bool] = mapped_column(default=False)
+    is_system: Mapped[bool] = mapped_column(default=False)   # superadmin: locked (no edit, no delete)
+    is_builtin: Mapped[bool] = mapped_column(default=False)  # seeded roles: cannot be deleted
     permissions: Mapped[list["Permission"]] = relationship(
         secondary="role_permissions", lazy="selectin"
     )
