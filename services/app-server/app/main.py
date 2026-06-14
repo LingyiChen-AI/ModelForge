@@ -26,3 +26,6 @@ app.include_router(auth.router)
 
 from app.api import users
 app.include_router(users.router)
+
+from app.api import roles
+app.include_router(roles.router)
