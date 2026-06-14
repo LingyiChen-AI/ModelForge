@@ -16,6 +16,10 @@ def test_create_and_stop_deployment(tmp_path, monkeypatch):
                       task_type="classification", base_model="b", train_metrics={})
     s.add(mv); s.commit(); mv_id = mv.id; s.close()
 
+    from tests.conftest import make_user, auth_headers
+    _d = dbmod.SessionLocal(); _root = make_user(_d, codes=("*",), data_scope="all", email="root_dep@x.com")
+    H = auth_headers(_root.id); _d.close()
+
     import app.services.deployment_service as ds
     calls = {}
     monkeypatch.setattr(ds, "notify_load", lambda mv: calls.setdefault("load", mv.id))
@@ -23,11 +27,11 @@ def test_create_and_stop_deployment(tmp_path, monkeypatch):
 
     from app.main import app
     c = TestClient(app)
-    r = c.post("/deployments", json={"model_version_id": mv_id})
+    r = c.post("/deployments", json={"model_version_id": mv_id}, headers=H)
     assert r.status_code == 201
     body = r.json()
     assert body["status"] == "running" and calls["load"] == mv_id
 
-    r = c.post(f"/deployments/{body['id']}/stop")
+    r = c.post(f"/deployments/{body['id']}/stop", headers=H)
     assert r.status_code == 200 and r.json()["status"] == "stopped"
     assert calls["unload"] == mv_id

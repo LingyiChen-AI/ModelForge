@@ -3,12 +3,13 @@ from app.models.training import Deployment, ModelVersion
 from app.config import settings
 from app.modelserver_client import load_on_server as notify_load, unload_on_server as notify_unload
 
-def create(db: Session, body) -> Deployment:
+def create(db: Session, body, created_by=None) -> Deployment:
     mv = db.get(ModelVersion, body.model_version_id)
     if not mv:
         raise ValueError("model_version not found")
     dep = Deployment(model_version_id=mv.id, config=body.config,
-                     endpoint=f"{settings.model_server_url}/predict")
+                     endpoint=f"{settings.model_server_url}/predict",
+                     created_by=created_by)
     db.add(dep); db.commit(); db.refresh(dep)
     try:
         notify_load(mv)

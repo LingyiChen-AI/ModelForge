@@ -12,6 +12,7 @@ def upsert_model_version_from_result(db: Session, training_job_id: int,
         mlflow_model_name=result["model_name"], mlflow_version=str(result["version"]),
         task_type=job.task_type, base_model=job.base_model,
         train_metrics=result.get("metrics", {}),
+        created_by=job.created_by,
         artifact_uri=f"models:/{result['model_name']}/{result['version']}")
     db.add(mv); db.commit(); db.refresh(mv)
     return mv

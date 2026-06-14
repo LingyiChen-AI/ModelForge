@@ -16,6 +16,10 @@ def test_create_training_job(tmp_path, monkeypatch):
                         row_count=2, checksum="c", note=""); s.add(dv); s.commit()
     dv_id = dv.id; s.close()
 
+    from tests.conftest import make_user, auth_headers
+    _d = dbmod.SessionLocal(); _root = make_user(_d, codes=("*",), data_scope="all", email="root_train@x.com")
+    H = auth_headers(_root.id); _d.close()
+
     sent = {}
     import app.services.training_service as ts
     def fake_send(job_id):
@@ -28,7 +32,7 @@ def test_create_training_job(tmp_path, monkeypatch):
     r = client.post("/training-jobs", json={
         "name": "job1", "dataset_version_id": dv_id,
         "base_model": "bert-base-chinese", "task_type": "classification",
-        "hyperparams": {"epochs": 1}})
+        "hyperparams": {"epochs": 1}}, headers=H)
     assert r.status_code == 201
     body = r.json()
     assert body["status"] == "pending"

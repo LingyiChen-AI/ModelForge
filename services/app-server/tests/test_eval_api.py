@@ -21,6 +21,10 @@ def test_create_eval_run(tmp_path, monkeypatch):
     s.add(mv); s.commit()
     mv_id, dv_id = mv.id, dv.id; s.close()
 
+    from tests.conftest import make_user, auth_headers
+    _d = dbmod.SessionLocal(); _root = make_user(_d, codes=("*",), data_scope="all", email="root_eval@x.com")
+    H = auth_headers(_root.id); _d.close()
+
     import app.services.eval_service as es
     sent = {}
     def fake_send(run_id):
@@ -30,7 +34,7 @@ def test_create_eval_run(tmp_path, monkeypatch):
 
     from app.main import app
     c = TestClient(app)
-    r = c.post("/eval-runs", json={"model_version_id": mv_id, "dataset_version_id": dv_id})
+    r = c.post("/eval-runs", json={"model_version_id": mv_id, "dataset_version_id": dv_id}, headers=H)
     assert r.status_code == 201
     body = r.json()
     assert body["status"] == "pending" and body["celery_task_id"] == "celery-eval-1"
