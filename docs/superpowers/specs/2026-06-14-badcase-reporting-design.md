@@ -40,13 +40,13 @@ badcase 作为 app-server 的一等实体,复用现有 dataset / training / RBAC
         “去修复” ──> 现有训练流(可多选合并原训练集) ──> 新 ModelVersion
 
 外部业务后端 ──X-Api-Key──> model-server /predict|/embed|/similarity
-                                  └── 调 app-server 内部校验端点(带缓存)验证 key.scope=inference
+                                  └── 直查共享 api_keys 表(用 common 的算法)验证 key.scope=inference
 ```
 
-**关键架构决策(请评审):** API Key 的存储与校验逻辑**只在 app-server**(单一事实源,DRY)。
-- badcase 上报端点在 app-server,**进程内**直接查表校验。
-- model-server 的推理接口需要 `X-Api-Key`,它通过调用 app-server 的内部校验端点 `POST /internal/api-keys/verify`(用现有 `X-Internal-Token` 保护)来验证,并带一个 60s 的内存 TTL 缓存,避免每次推理都打一次远程校验。这样 model-server 保持与存储解耦,且 key 逻辑不重复。
-- 备选:让外部推理流量统一经 app-server 网关转发——会改变 API 详情里对外暴露的 URL(从 model-server 直连改为经 app-server),改动更大,故不采用;若评审更偏好网关式,可在此处切换。
+**关键架构决策:** API Key 的**算法**(生成 / sha256 哈希 / scope+吊销 授权判断)放在 **`services/common/modelforge_common/apikey.py`**(纯 stdlib,零依赖),app-server 与 model-server **都直接 import** 这同一套算法;`api_keys` 表是唯一存储,两端各自用自己的 DB 连接直查该表后用 common 的 `key_authorized()` 判定。
+- badcase 上报端点(app-server):进程内用 ORM 查 `ApiKey` + `key_authorized`。
+- model-server 推理接口:用自己的 DB 连接(与 train-worker 一样直连同一 Postgres)`SELECT scopes, revoked_at FROM api_keys WHERE key_hash=:h`,再 `key_authorized`。**不再有内部校验端点、远程调用或缓存**——直查带 `key_hash` 唯一索引,单次查询极廉价。
+- 收益:算法 DRY(改哈希/授权规则只改 common 一处),无服务间请求耦合,吊销即时生效(无缓存延迟)。代价:model-server 增加对共享 Postgres 的只读连接(与 worker 现状一致)。
 
 ## 4. 通用 API Key 系统
 
@@ -63,21 +63,22 @@ badcase 作为 app-server 的一等实体,复用现有 dataset / training / RBAC
 | `last_used_at` | datetime null | 每次校验命中时异步更新(节流) |
 | `revoked_at` | datetime null | 非空即吊销 |
 
-- 明文 key 形如 `mf_<32位随机>`,**仅创建时在响应里返回一次**,之后不可再取(库里无明文)。
-- 校验:取请求头 `X-Api-Key` → sha256 → 查 `key_hash` 且 `revoked_at IS NULL`,再校验所需 scope 在 `scopes` 内。
+- 明文 key 形如 `mf_<随机>`,**仅创建时在响应里返回一次**,之后不可再取(库里无明文)。
+- 算法在 `common`:`generate_key()→(plaintext, prefix)`、`hash_key(plaintext)→sha256`、`key_authorized(scopes, revoked_at, scope)→bool`(纯函数)。
+- 校验:取请求头 `X-Api-Key` → `hash_key` → 查 `key_hash` 命中的行 → `key_authorized(row.scopes, row.revoked_at, scope)`。
 
 ### 4.2 管理 API(JWT + `apikey:manage`)
 - `GET /api-keys` — 列表(展示 name / key_prefix / scopes / 状态 / 创建者 / 时间;**不含明文/hash**)。
 - `POST /api-keys` — `{name, scopes[]}` → 创建,**响应含一次性明文 key**。
 - `DELETE /api-keys/{id}` — 吊销(置 `revoked_at`;软删,保留审计)。
 
-### 4.3 内部校验端点(供 model-server 调用)
-- `POST /internal/api-keys/verify`(`X-Internal-Token`):`{key, scope}` → `{valid: bool, key_id?, name?}`。命中即异步刷新 `last_used_at`。
+### 4.3 共享算法模块(`services/common/modelforge_common/apikey.py`)
+- 纯 stdlib:`generate_key`、`hash_key`、`key_authorized`。app-server 与 model-server 都 import,**无需任何内部校验端点**。
 
 ### 4.4 model-server 接入
-- 新增依赖:`require_api_key(scope="inference")`,从 `X-Api-Key` 读 key → 查内存缓存(TTL 60s)→ 未命中则调 app-server 内部校验端点 → 缓存结果。失败返回信封 `{code: 401, data: null, message: "invalid or missing api key"}`(保留 HTTP 401)。
+- 新增 `require_api_key(scope="inference")` 依赖:从 `X-Api-Key` 读 key → 用自己的 DB 连接查 `api_keys`(`key_hash` 命中)→ `common.key_authorized`。失败返回信封 `{code: 401, data: null, message: …}`(保留 HTTP 401);DB 不可达 → fail-closed 503。
 - 加在 `/predict`、`/embed`、`/similarity` 上;`/load`、`/loaded`、`/health` 保持内部(`/load` 仅 app-server 调用,沿用现状)。
-- model-server config 增加 `app_server_url`、`internal_token`(若已有则复用)。
+- model-server config 增加 `database_url`(与 train-worker 一致);依赖增加 `sqlalchemy` + `psycopg`。
 
 ## 5. Badcase 数据模型 `badcases`(迁移 012)
 | 列 | 类型 | 说明 |
@@ -125,7 +126,6 @@ badcase 作为 app-server 的一等实体,复用现有 dataset / training / RBAC
 | `PATCH` | `/badcases/{id}/annotate` | JWT `badcase:annotate` | 提交标注;status→annotated |
 | `POST` | `/badcases/build-dataset` | JWT `dataset:write` | `{badcase_ids[], name?}` → 建 `badcase-` 训练集 |
 | `GET/POST/DELETE` | `/api-keys`、`/api-keys/{id}` | JWT `apikey:manage` | API Key 管理 |
-| `POST` | `/internal/api-keys/verify` | X-Internal-Token | 供 model-server 校验 |
 
 ## 8. 标注 → 生成训练集
 
@@ -167,29 +167,28 @@ badcase 作为 app-server 的一等实体,复用现有 dataset / training / RBAC
 
 ## 13. 错误处理与边界
 - 上报:未知/已删 `model_version_id` → 422;`input` 缺必填字段 → 422;`X-Api-Key` 缺失/无效/吊销/scope 不符 → 401。
-- 推理(model-server):同上 401 用信封 `{code:401,data:null,message:…}`,保留 HTTP 401。
-- 内部校验端点:缺 `X-Internal-Token` → 401;app-server 不可达时 model-server **拒绝**(fail-closed),返回 503 信封。
+- 推理(model-server):同上 401 用信封 `{code:401,data:null,message:…}`,保留 HTTP 401;DB 不可达时 fail-closed,返回 503 信封。
 - build-dataset:含未标注 / 混 task_type → 422;空选择 → 422。
 - embedding:`candidates` 为空或标注后 `pos` 为空 → 该条不可建集(校验提示)。
-- api-key:明文仅返回一次;吊销后立即失效(校验查 `revoked_at`),model-server 缓存 60s 内可能仍放行(可接受;吊销说明里注明 ≤60s 生效)。
+- api-key:明文仅返回一次;吊销后**立即失效**(两端都实时查 `revoked_at`,无缓存)。
 
 ## 14. 测试
 - API Key:创建返回一次性明文且库存 hash;校验命中/吊销失效;scope 不符拒绝;`apikey:manage` 鉴权。
-- 内部校验端点:X-Internal-Token 保护;valid/invalid 分支。
-- model-server:推理无 key→401、错 scope→401、有效→200(mock 校验端点 + 缓存命中只远程一次)。
+- common:`generate_key`/`hash_key`/`key_authorized`(含 JSON-string scopes、吊销、scope 不符)。
+- model-server:推理无 key→401、错 scope→401、吊销→401、有效→200(用 sqlite 模拟 `api_keys` 表 + monkeypatch `_get_engine`)。
 - 上报:四类契约校验(合法入库 / 非法 422);未知版本 422;`(source,source_ref)` 幂等去重;按 model_version 归类。
 - 标注:四类 annotate 写入 + status 流转。
 - build-dataset:四类 badcase → 正确训练行;`badcase-` 前缀强制;混类型/未标注拒绝;status→used + 回填 version。
 - 修复:复用训练流(已有多数据集合并测试覆盖)。
 
 ## 15. 分期(实现计划参考)
-1. **通用 API Key 系统**(表 + 管理 API + 内部校验 + 前端 API Key 页)。
-2. **model-server 推理鉴权**(接入 require_api_key + 缓存;部署 API 详情更新)。
+1. **通用 API Key 系统**(common 算法 + 表 + 管理 API + 前端 API Key 页)。
+2. **model-server 推理鉴权**(common 共享算法 + 直查共享 DB 的 require_api_key;部署 API 详情更新)。
 3. **Badcase 上报 + 契约 + 列表归类**(report API + rules + badcases 表 + 列表/详情)。
 4. **标注 + 生成训练集**(annotate + build-dataset,四类映射)。
 5. **修复联动 + RBAC + 收尾**(去修复跳转、权限/迁移、规则页、测试补全)。
 
-## 16. 待评审的开放决策
-1. 推理鉴权落点:**model-server 调 app-server 内部校验 + 缓存**(本稿默认)vs **app-server 网关转发**。
-2. embedding 上报契约里 `candidates` 是否必须带相似度(`ranked`),还是允许只给候选文本(平台不需要分数也能标注)?本稿设为 `ranked` 可选、纯候选文本即可标注。
-3. badcase 是否需要 `created_by` / 数据范围隔离?本稿设为不隔离(上报无用户主体)。
+## 16. 已定决策(评审通过)
+1. 推理鉴权:API Key **算法放 `common`**,app-server 与 model-server 各自直查共享 `api_keys` 表校验(无内部端点/无缓存)。✅
+2. embedding 上报 `candidates` 不强制带相似度(`ranked` 可选,纯候选文本即可标注)。✅
+3. badcase 不按 `created_by` 做数据范围隔离(上报无用户主体)。✅

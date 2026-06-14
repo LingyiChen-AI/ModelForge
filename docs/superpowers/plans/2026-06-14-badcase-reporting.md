@@ -4,7 +4,7 @@
 
 **Goal:** 落地“上线 → 发现 badcase → API 上报 → 标注 → 重训修复”闭环,并新增一套通用 API Key 体系,既给上报接口、也给 model-server 推理接口鉴权。
 
-**Architecture:** badcase 作为 app-server 一等实体,复用现有 dataset/training/RBAC。API Key 存储与校验只在 app-server(单一事实源);model-server 推理接口通过调用 app-server 内部校验端点(带 60s 内存缓存)强制 `X-Api-Key`。标注后的 badcase 一键生成 `badcase-` 前缀训练集,复用现有训练流(多数据集合并)做修复。
+**Architecture:** badcase 作为 app-server 一等实体,复用现有 dataset/training/RBAC。API Key **算法放 `services/common`**(generate/hash/authorize),app-server 与 model-server 都 import 并各自直查共享 `api_keys` 表校验 `X-Api-Key`(无内部端点/无缓存)。标注后的 badcase 一键生成 `badcase-` 前缀训练集,复用现有训练流(多数据集合并)做修复。
 
 **Tech Stack:** FastAPI + SQLAlchemy 2.0 + 编号 SQL 迁移(app-server)、FastAPI(model-server)、React + Vite + TS(frontend)、pytest。
 
@@ -24,12 +24,15 @@
 
 ## File Structure(新增/修改)
 
+**common(共享算法)**
+- Create `services/common/modelforge_common/apikey.py` — 纯 stdlib:`generate_key` / `hash_key` / `key_authorized`(app-server 与 model-server 都 import)。
+
 **app-server**
 - Create `app/models/api_key.py` — `ApiKey` ORM。
-- Create `app/services/api_key_service.py` — 生成/hash/校验/列表/吊销。
+- Create `app/services/api_key_service.py` — 复用 common 算法 + ORM 查询(create/verify/list/revoke)。
 - Create `app/api_key_auth.py` — `require_api_key(scope)` FastAPI 依赖(供上报端点用)。
 - Create `app/schemas/api_key.py` — 入参/出参。
-- Create `app/api/api_keys.py` — `/api-keys` 管理 + `/internal/api-keys/verify`。
+- Create `app/api/api_keys.py` — `/api-keys` 管理(无内部校验端点)。
 - Create `app/models/badcase.py` — `Badcase` ORM。
 - Create `app/badcase_contracts.py` — 四类任务的 input/annotation 校验 + 训练行映射 + rules/category。
 - Create `app/services/badcase_service.py` — report / annotate / build_dataset。
@@ -41,8 +44,9 @@
 - Tests:`tests/test_api_keys.py`、`tests/test_badcase_contracts.py`、`tests/test_badcase_api.py`、`tests/test_badcase_build_dataset.py`、`tests/test_bootstrap.py`(更新计数)、`tests/test_migrations_apply.py`(如断言迁移数量则更新)。
 
 **model-server**
-- Modify `server/config.py` — 加 `app_server_url`、`internal_token`。
-- Create `server/api_auth.py` — `require_api_key` 依赖(TTL 缓存 + 调 app-server verify)。
+- Modify `server/config.py` — 加 `database_url`(与 train-worker 一致)。
+- Modify `server/pyproject.toml` — 依赖加 `sqlalchemy` + `psycopg`。
+- Create `server/api_auth.py` — `require_api_key` 依赖(直连共享 Postgres 查 `api_keys` + common `key_authorized`)。
 - Modify `server/main.py` — `/predict`、`/embed`、`/similarity` 加依赖。
 - Tests:`tests/test_api_auth.py`、更新 `tests/test_server_api.py`(请求带 key)。
 
@@ -54,6 +58,87 @@
 ---
 
 # Phase 1 — 通用 API Key 系统
+
+### Task 1.0: 共享 API Key 算法(common 模块)
+
+**Files:**
+- Create: `services/common/modelforge_common/apikey.py`
+- Test: `services/common/tests/test_apikey.py`
+
+- [ ] **Step 1: 写失败测试**
+
+```python
+# services/common/tests/test_apikey.py
+from modelforge_common import apikey
+
+def test_generate_and_hash():
+    plaintext, prefix = apikey.generate_key()
+    assert plaintext.startswith("mf_") and prefix == plaintext[:11]
+    h = apikey.hash_key(plaintext)
+    assert h != plaintext and len(h) == 64 and apikey.hash_key(plaintext) == h  # deterministic
+
+def test_key_authorized():
+    assert apikey.key_authorized(["inference"], None, "inference") is True
+    assert apikey.key_authorized(["inference"], None, "badcase:report") is False   # scope mismatch
+    assert apikey.key_authorized(["inference"], "2026-01-01", "inference") is False  # revoked
+    assert apikey.key_authorized('["inference"]', None, "inference") is True         # JSON-string scopes (sqlite)
+    assert apikey.key_authorized(None, None, "inference") is False
+```
+
+- [ ] **Step 2: 跑测试看它失败**
+
+Run: `cd services/common && python -m pytest tests/test_apikey.py -q`
+Expected: FAIL（`ModuleNotFoundError: modelforge_common.apikey`）
+
+- [ ] **Step 3: 写模块**
+
+```python
+# services/common/modelforge_common/apikey.py
+"""Shared API key algorithm — used by app-server (issue + verify) and model-server
+(verify). Pure stdlib so any service can import it without extra deps."""
+import hashlib
+import json
+import secrets
+
+PREFIX = "mf_"
+
+
+def generate_key() -> tuple[str, str]:
+    """Return (plaintext, key_prefix). Plaintext is shown once; store only its hash."""
+    plaintext = PREFIX + secrets.token_urlsafe(24)
+    return plaintext, plaintext[:11]
+
+
+def hash_key(plaintext: str) -> str:
+    return hashlib.sha256(plaintext.encode()).hexdigest()
+
+
+def key_authorized(scopes, revoked_at, scope: str) -> bool:
+    """Pure authorization check given a fetched key row's scopes + revoked_at.
+    `scopes` may be a list (ORM/PG JSON) or a JSON string (raw sqlite TEXT)."""
+    if revoked_at is not None:
+        return False
+    if isinstance(scopes, str):
+        try:
+            scopes = json.loads(scopes)
+        except (ValueError, TypeError):
+            scopes = []
+    return scope in (scopes or [])
+```
+
+- [ ] **Step 4: 跑测试看通过**
+
+Run: `cd services/common && python -m pytest tests/test_apikey.py -q`
+Expected: PASS
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add services/common/modelforge_common/apikey.py services/common/tests/test_apikey.py
+git commit -m "feat(common): shared API key algorithm (generate/hash/authorize)"
+```
+
+---
 
 ### Task 1.1: `ApiKey` 模型 + 迁移 011
 
@@ -177,23 +262,21 @@ Expected: FAIL（`ModuleNotFoundError`）
 
 ```python
 # services/app-server/app/services/api_key_service.py
-import hashlib
-import secrets
 from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from modelforge_common.apikey import generate_key, hash_key, key_authorized  # shared algorithm
 from app.models.api_key import ApiKey
 
-
-def hash_key(plaintext: str) -> str:
-    return hashlib.sha256(plaintext.encode()).hexdigest()
+# re-exported so callers/tests can do api_key_service.hash_key(...)
+__all__ = ["hash_key", "create_key", "verify", "list_keys", "revoke"]
 
 
 def create_key(db: Session, *, name: str, scopes: list[str],
                created_by: int | None) -> tuple[str, ApiKey]:
     """Returns (plaintext, ApiKey). Plaintext is shown once and never stored."""
-    plaintext = "mf_" + secrets.token_urlsafe(24)
-    key = ApiKey(name=name, key_prefix=plaintext[:11], key_hash=hash_key(plaintext),
+    plaintext, prefix = generate_key()
+    key = ApiKey(name=name, key_prefix=prefix, key_hash=hash_key(plaintext),
                  scopes=list(scopes), created_by=created_by)
     db.add(key); db.commit(); db.refresh(key)
     return plaintext, key
@@ -203,7 +286,7 @@ def verify(db: Session, plaintext: str, scope: str) -> ApiKey | None:
     if not plaintext:
         return None
     key = db.execute(select(ApiKey).where(ApiKey.key_hash == hash_key(plaintext))).scalar_one_or_none()
-    if not key or key.revoked_at is not None or scope not in (key.scopes or []):
+    if not key or not key_authorized(key.scopes, key.revoked_at, scope):
         return None
     key.last_used_at = datetime.now(timezone.utc)
     db.commit()
@@ -320,7 +403,7 @@ git commit -m "feat(api-key): apikey:manage permission + migration 012 + bootstr
 
 ---
 
-### Task 1.4: API Key 管理 API + 内部校验端点
+### Task 1.4: API Key 管理 API
 
 **Files:**
 - Create: `services/app-server/app/schemas/api_key.py`
@@ -348,19 +431,15 @@ def test_api_keys_endpoints(session_factory):
     assert r.status_code == 201
     body = r.json()
     assert body["plaintext"].startswith("mf_")          # shown once
-    assert "key_hash" not in body and "plaintext" not in c.get("/api-keys", headers=H).json()[0]
+    listed = c.get("/api-keys", headers=H).json()
+    assert listed and "plaintext" not in listed[0] and "key_hash" not in listed[0]
     kid = body["id"]
-    # internal verify
-    v = c.post("/internal/api-keys/verify",
-               json={"key": body["plaintext"], "scope": "badcase:report"},
-               headers={"X-Internal-Token": "modelforge-internal"})
-    assert v.status_code == 200 and v.json()["valid"] is True
-    # revoke -> verify false
+    # revoke -> list shows it revoked
     assert c.delete(f"/api-keys/{kid}", headers=H).status_code == 200
-    v2 = c.post("/internal/api-keys/verify",
-                json={"key": body["plaintext"], "scope": "badcase:report"},
-                headers={"X-Internal-Token": "modelforge-internal"})
-    assert v2.json()["valid"] is False
+    again = next(k for k in c.get("/api-keys", headers=H).json() if k["id"] == kid)
+    assert again["revoked_at"] is not None
+    # invalid scope on create -> 422
+    assert c.post("/api-keys", json={"name": "x", "scopes": ["nope"]}, headers=H).status_code == 422
 
 def test_api_keys_requires_perm(session_factory):
     c, H = _client_with(session_factory, ("dataset:read",))
@@ -398,15 +477,11 @@ class ApiKeyOut(BaseModel):
 
 class ApiKeyCreated(ApiKeyOut):
     plaintext: str   # one-time secret
-
-class VerifyIn(BaseModel):
-    key: str
-    scope: str
 ```
 
 注:`created_by_name` 复用不了 CreatorMixin(ApiKey 未继承它)。在 `_out` 里手动塞 None,或给 ApiKey 加 CreatorMixin。**决策**:给 `ApiKey` 继承 `CreatorMixin`(与其它表一致),则 `created_by_name` 自动可用——回到 Task 1.1 模型,把 `class ApiKey(Base, TimestampMixin):` 改为 `class ApiKey(Base, TimestampMixin, CreatorMixin):`(若已实现则在本步顺手改并补一行 import)。
 
-- [ ] **Step 4: 写 API + 内部端点**
+- [ ] **Step 4: 写 API**
 
 ```python
 # services/app-server/app/api/api_keys.py
@@ -414,13 +489,11 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db import get_db
 from app.authz import require
-from app.auth import require_internal_token
 from app.models.user import User
-from app.schemas.api_key import ApiKeyCreate, ApiKeyOut, ApiKeyCreated, VerifyIn, VALID_SCOPES
+from app.schemas.api_key import ApiKeyCreate, ApiKeyOut, ApiKeyCreated, VALID_SCOPES
 from app.services import api_key_service
 
 router = APIRouter(prefix="/api-keys", tags=["api-keys"])
-internal_router = APIRouter(tags=["api-keys-internal"])
 
 
 @router.get("", response_model=list[ApiKeyOut])
@@ -436,8 +509,7 @@ def create_key(body: ApiKeyCreate, user: User = Depends(require("apikey:manage")
         raise HTTPException(422, f"scopes must be a non-empty subset of {sorted(VALID_SCOPES)}")
     plaintext, key = api_key_service.create_key(db, name=body.name, scopes=body.scopes,
                                                 created_by=user.id)
-    out = ApiKeyCreated.model_validate(key).model_copy(update={"plaintext": plaintext})
-    return out
+    return ApiKeyCreated.model_validate(key).model_copy(update={"plaintext": plaintext})
 
 
 @router.delete("/{key_id}")
@@ -446,15 +518,9 @@ def revoke_key(key_id: int, _: User = Depends(require("apikey:manage")),
     if not api_key_service.revoke(db, key_id):
         raise HTTPException(404, "key not found or already revoked")
     return {"revoked": True}
-
-
-@internal_router.post("/internal/api-keys/verify",
-                      dependencies=[Depends(require_internal_token)])
-def verify_key(body: VerifyIn, db: Session = Depends(get_db)):
-    key = api_key_service.verify(db, body.key, body.scope)
-    return {"valid": key is not None, "key_id": key.id if key else None,
-            "name": key.name if key else None}
 ```
+
+注:`app/schemas/api_key.py`(Task 1.4 Step 3)里删掉不再使用的 `VerifyIn`。
 
 - [ ] **Step 5: 注册 router**
 
@@ -462,7 +528,6 @@ def verify_key(body: VerifyIn, db: Session = Depends(get_db)):
 # services/app-server/app/main.py — after the users router block
 from app.api import api_keys
 app.include_router(api_keys.router)
-app.include_router(api_keys.internal_router)
 ```
 
 - [ ] **Step 6: 跑测试看通过**
@@ -474,7 +539,7 @@ Expected: PASS
 
 ```bash
 git add services/app-server/app/schemas/api_key.py services/app-server/app/api/api_keys.py services/app-server/app/main.py services/app-server/app/models/api_key.py services/app-server/tests/test_api_keys.py
-git commit -m "feat(api-key): management API + internal verify endpoint"
+git commit -m "feat(api-key): management API (create/list/revoke)"
 ```
 
 ---
@@ -598,7 +663,7 @@ export function ApiKeysPage() {
         onCancel={() => setCreated(null)} onConfirm={() => setCreated(null)} />
 
       <ConfirmDialog open={revoke !== null} title="吊销 API Key" confirmText="吊销" busy={revBusy}
-        message={<>确定吊销 <b className="text-slate-700">{revoke?.name}</b>?吊销后该 Key 立即失效(model-server 缓存最长 60 秒生效)。</>}
+        message={<>确定吊销 <b className="text-slate-700">{revoke?.name}</b>?吊销后该 Key 立即失效(上报与推理两端都实时校验)。</>}
         onCancel={() => setRevoke(null)} onConfirm={doRevoke} />
     </>
   );
@@ -635,38 +700,52 @@ git commit -m "feat(api-key): API Keys management page + nav"
 
 # Phase 2 — model-server 推理鉴权
 
-### Task 2.1: model-server `require_api_key` 依赖(TTL 缓存 + 调 verify)
+### Task 2.1: model-server `require_api_key` 依赖(直查共享 DB + common 算法)
 
 **Files:**
 - Modify: `services/model-server/server/config.py`
+- Modify: `services/model-server/pyproject.toml`
 - Create: `services/model-server/server/api_auth.py`
 - Test: `services/model-server/tests/test_api_auth.py`
 
-- [ ] **Step 1: 写失败测试**
+- [ ] **Step 1: 写失败测试(用 sqlite 模拟 api_keys 表)**
 
 ```python
 # services/model-server/tests/test_api_auth.py
-import time
 import pytest
 from fastapi import HTTPException
+from sqlalchemy import create_engine, text
+from modelforge_common.apikey import hash_key
 import server.api_auth as auth
 
-def test_require_api_key_valid_and_cached(monkeypatch):
-    auth._CACHE.clear()
-    calls = {"n": 0}
-    def fake_verify(key, scope):
-        calls["n"] += 1
-        return key == "good"
-    monkeypatch.setattr(auth, "_remote_verify", fake_verify)
+def _engine_with_key(tmp_path, plaintext, scopes='["inference"]', revoked=None):
+    eng = create_engine(f"sqlite:///{tmp_path}/k.db")
+    with eng.begin() as c:
+        c.execute(text("CREATE TABLE IF NOT EXISTS api_keys "
+                       "(key_hash TEXT, scopes TEXT, revoked_at TIMESTAMP)"))
+        c.execute(text("INSERT INTO api_keys (key_hash, scopes, revoked_at) "
+                       "VALUES (:h, :s, :r)"),
+                  {"h": hash_key(plaintext), "s": scopes, "r": revoked})
+    return eng
+
+def test_require_api_key(monkeypatch, tmp_path):
+    eng = _engine_with_key(tmp_path, "good")
+    monkeypatch.setattr(auth, "_get_engine", lambda: eng)
     dep = auth.require_api_key("inference")
-    assert dep(x_api_key="good") is None          # passes
-    assert dep(x_api_key="good") is None           # cache hit
-    assert calls["n"] == 1                          # only one remote call
+    assert dep(x_api_key="good") is None                 # valid
     with pytest.raises(HTTPException) as e:
-        dep(x_api_key="bad")
+        dep(x_api_key="bad")                              # unknown key
     assert e.value.status_code == 401
     with pytest.raises(HTTPException):
-        dep(x_api_key=None)                         # missing key
+        dep(x_api_key=None)                               # missing key
+    with pytest.raises(HTTPException):
+        auth.require_api_key("badcase:report")(x_api_key="good")  # wrong scope
+
+def test_require_api_key_revoked(monkeypatch, tmp_path):
+    eng = _engine_with_key(tmp_path, "good", revoked="2026-01-01 00:00:00")
+    monkeypatch.setattr(auth, "_get_engine", lambda: eng)
+    with pytest.raises(HTTPException):
+        auth.require_api_key("inference")(x_api_key="good")
 ```
 
 - [ ] **Step 2: 跑测试看它失败**
@@ -674,7 +753,7 @@ def test_require_api_key_valid_and_cached(monkeypatch):
 Run: `cd services/model-server && python -m pytest tests/test_api_auth.py -q`
 Expected: FAIL（`ModuleNotFoundError: server.api_auth`）
 
-- [ ] **Step 3: config 加字段**
+- [ ] **Step 3: config 加 `database_url` + pyproject 加依赖**
 
 ```python
 # services/model-server/server/config.py
@@ -685,48 +764,43 @@ class Settings(BaseSettings):
     s3_endpoint_url: str = "http://localhost:9000"
     s3_access_key: str = "minioadmin"
     s3_secret_key: str = "minioadmin"
-    app_server_url: str = "http://localhost:8000"
-    internal_token: str = "modelforge-internal"
+    database_url: str = "postgresql+psycopg://modelforge:modelforge@localhost:5432/modelforge"
 settings = Settings()
 ```
 
-- [ ] **Step 4: 写依赖**
+`services/model-server/pyproject.toml` 的 `dependencies` 里追加 `"sqlalchemy>=2.0"`, `"psycopg[binary]>=3.1"`(与 train-worker 一致),并 `pip install -e 'services/model-server[dev]'` 重装。
+
+- [ ] **Step 4: 写依赖(直查共享 api_keys 表)**
 
 ```python
 # services/model-server/server/api_auth.py
-import time
-import requests
 from fastapi import Header, HTTPException
+from sqlalchemy import create_engine, text
+from modelforge_common.apikey import hash_key, key_authorized
 from server.config import settings
 
-_CACHE: dict[tuple[str, str], tuple[bool, float]] = {}
-_TTL = 60.0  # seconds
+_engine = None
 
 
-def _remote_verify(key: str, scope: str) -> bool:
-    """Ask app-server (single source of truth) whether key has scope."""
-    r = requests.post(f"{settings.app_server_url}/internal/api-keys/verify",
-                      json={"key": key, "scope": scope},
-                      headers={"X-Internal-Token": settings.internal_token}, timeout=5)
-    r.raise_for_status()
-    return bool(r.json().get("valid"))
+def _get_engine():
+    global _engine
+    if _engine is None:
+        _engine = create_engine(settings.database_url, pool_pre_ping=True)
+    return _engine
 
 
 def require_api_key(scope: str):
     def dep(x_api_key: str | None = Header(default=None)):
         if not x_api_key:
             raise HTTPException(401, "missing api key")
-        cached = _CACHE.get((x_api_key, scope))
-        now = time.monotonic()
-        if cached and now - cached[1] < _TTL:
-            valid = cached[0]
-        else:
-            try:
-                valid = _remote_verify(x_api_key, scope)
-            except Exception:
-                raise HTTPException(503, "auth backend unavailable")  # fail-closed
-            _CACHE[(x_api_key, scope)] = (valid, now)
-        if not valid:
+        try:
+            with _get_engine().connect() as c:
+                row = c.execute(
+                    text("SELECT scopes, revoked_at FROM api_keys WHERE key_hash = :h"),
+                    {"h": hash_key(x_api_key)}).mappings().first()
+        except Exception:
+            raise HTTPException(503, "auth backend unavailable")  # fail-closed
+        if not row or not key_authorized(row["scopes"], row["revoked_at"], scope):
             raise HTTPException(401, "invalid or unauthorized api key")
         return None
     return dep
@@ -740,8 +814,8 @@ Expected: PASS
 - [ ] **Step 6: Commit**
 
 ```bash
-git add services/model-server/server/config.py services/model-server/server/api_auth.py services/model-server/tests/test_api_auth.py
-git commit -m "feat(model-server): X-Api-Key dependency (TTL cache + app-server verify)"
+git add services/model-server/server/config.py services/model-server/server/api_auth.py services/model-server/pyproject.toml services/model-server/tests/test_api_auth.py
+git commit -m "feat(model-server): X-Api-Key dependency (direct DB verify via common algorithm)"
 ```
 
 ---
@@ -754,14 +828,21 @@ git commit -m "feat(model-server): X-Api-Key dependency (TTL cache + app-server 
 
 - [ ] **Step 1: 改现有 server api 测试,让推理调用带 header 并覆盖鉴权**
 
-先看 `tests/test_server_api.py` 怎么调 `/predict` 等;在其 TestClient 调用处加 `headers={"X-Api-Key": "k"}`,并在测试 setup 里 `monkeypatch` 掉 `server.api_auth._remote_verify` 返回 True(或 `server.api_auth.require_api_key` 依赖覆盖)。最简方式:用 FastAPI 依赖覆盖:
+先看 `tests/test_server_api.py` 怎么调 `/predict` 等;在其 TestClient 调用处加 `headers={"X-Api-Key": "good"}`,并在测试 setup 里把 `server.api_auth._get_engine` 指到一个含合法 key 的 sqlite 引擎(复用 Task 2.1 测试里的 `_engine_with_key` 思路):
 
 ```python
 # in tests/test_server_api.py setup (wherever the TestClient/app is built)
+from sqlalchemy import create_engine, text
+from modelforge_common.apikey import hash_key
 import server.api_auth as api_auth
-monkeypatch.setattr(api_auth, "_remote_verify", lambda key, scope: True)
-# and add headers={"X-Api-Key": "k"} to each /predict /embed /similarity call
+_eng = create_engine(f"sqlite:///{tmp_path}/k.db")
+with _eng.begin() as c:
+    c.execute(text("CREATE TABLE api_keys (key_hash TEXT, scopes TEXT, revoked_at TIMESTAMP)"))
+    c.execute(text("INSERT INTO api_keys VALUES (:h, '[\"inference\"]', NULL)"), {"h": hash_key("good")})
+monkeypatch.setattr(api_auth, "_get_engine", lambda: _eng)
+# and add headers={"X-Api-Key": "good"} to each /predict /embed /similarity call
 ```
+（若该测试没有 `tmp_path`/`monkeypatch` fixture,给测试函数加上;或用 FastAPI 依赖覆盖 `app.dependency_overrides` 把 `require_api_key("inference")` 直接置为放行。)
 
 新增一条“无 key 被拒”测试:
 
@@ -1903,7 +1984,7 @@ git add -A && git commit -m "chore(badcase): regression fixes + verify migration
 ## Self-Review(执行者无需做,作者已核对)
 
 - **Spec 覆盖**:API Key 体系(§4)→ P1;model-server 推理鉴权(§4.4)→ P2;上报契约/规则(§6)→ Task 3.2/3.4;上报 API(§7)→ Task 3.3;归类列表(§3/§11)→ Task 3.5;标注 + 生成训练集(§8)→ Task 3.3/4.1/4.2;修复(§9)→ Task 5.1;RBAC/迁移(§10/§12)→ Task 1.3/3.4;边界(§13)→ 各 Task 测试;测试(§14)→ 各 Task。embedding 全流程含 Task 3.2/4.2。
-- **类型一致**:`api_key_service.create_key`→`(plaintext, ApiKey)`、`verify(db,key,scope)`、`require_api_key(scope)`(app-server 与 model-server 同名不同实现,前者进程内、后者远程缓存,已分别命名于 `app/api_key_auth.py` 与 `server/api_auth.py`)、`badcase_contracts.{validate_input,validate_annotation,to_training_row,category_of,rules}`、`badcase_service.{report,annotate,build_dataset}` 在各 Task 一致。
+- **类型一致**:`common.apikey.{generate_key,hash_key,key_authorized}` 为单一算法源;`api_key_service.{hash_key(re-export),create_key→(plaintext,ApiKey),verify(db,key,scope),list_keys,revoke}`;`require_api_key(scope)` 在 app-server(`app/api_key_auth.py`,进程内 ORM)与 model-server(`server/api_auth.py`,直查共享 DB)同名不同实现,二者都靠 `common.key_authorized` 判定;`badcase_contracts.{validate_input,validate_annotation,to_training_row,category_of,rules}`、`badcase_service.{report,annotate,build_dataset}` 在各 Task 一致。
 - **无占位符**:每个改代码的 Step 均给出完整代码与可执行命令。
 
 ## 执行选择
