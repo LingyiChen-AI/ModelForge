@@ -50,5 +50,15 @@ class EmbeddingRecipe(Recipe):
                   epochs=int(hyperparams.get("epochs", 1)), warmup_steps=0,
                   show_progress_bar=False)
         model.save(output_dir)
-        return TrainResult(metrics={"train_pairs": len(examples)},
-                           artifact_dir=output_dir, label_names=[])
+        metrics = {"train_pairs": len(examples)}
+        # Report retrieval quality on the held-out eval set (recall@1/3/5) so the model's
+        # metrics are meaningful — not just a pair count. Mirrors how the other recipes
+        # surface eval metrics from their validation set.
+        if eval_df is not None and len(eval_df) > 0:
+            from worker.evaluators.embedding import EmbeddingEvaluator
+            try:
+                ev = EmbeddingEvaluator().evaluate(output_dir, eval_df)
+                metrics.update({k: v for k, v in ev.items() if k.startswith("recall@")})
+            except Exception:
+                pass
+        return TrainResult(metrics=metrics, artifact_dir=output_dir, label_names=[])

@@ -22,7 +22,10 @@ def test_embedding_trains_and_evaluates(tmp_path):
         "pos": [["a small kitten"],["a puppy"],["a fast vehicle"],["a tall plant"]] * 3,
         "neg": [[],[],[],[]] * 3})
     res = EmbeddingRecipe().train(df=df, base_model="prajjwal1/bert-tiny",
-        hyperparams={"epochs": 1, "batch_size": 4}, output_dir=str(tmp_path))
+        hyperparams={"epochs": 1, "batch_size": 4}, output_dir=str(tmp_path), eval_df=df)
     assert res.artifact_dir == str(tmp_path)
+    # recipe now reports retrieval recall@k from the eval set as the model's metrics
+    assert "recall@1" in res.metrics and 0.0 <= res.metrics["recall@1"] <= 1.0
+    assert "recall@3" in res.metrics and "recall@5" in res.metrics
     metrics = EmbeddingEvaluator().evaluate(model_dir=str(tmp_path), df=df)
     assert "recall@1" in metrics and 0.0 <= metrics["recall@1"] <= 1.0
