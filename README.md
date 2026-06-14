@@ -30,7 +30,7 @@
 
 | 组件 | 技术栈 | 职责 | 不负责 |
 |---|---|---|---|
-| **app-server** | FastAPI + SQLAlchemy + Alembic | 认证、CRUD、版本管理、任务编排、对前端 API | 不跑训练/推理 |
+| **app-server** | FastAPI + SQLAlchemy + 编号 SQL 迁移 | 认证、CRUD、版本管理、任务编排、对前端 API | 不跑训练/推理 |
 | **train-worker** | Celery + HuggingFace + sentence-transformers | 离线批处理:训练 + 评估(GPU) | 不对外提供 HTTP |
 | **model-server** | FastAPI + transformers | 在线推理服务 | 不做训练/评估 |
 | **前端** | React + TypeScript + Vite | 数据集 / 训练 / 模型版本页面 | — |
@@ -49,7 +49,7 @@ ModelForge/
 ├── images/architecture.png       # 架构图
 ├── services/
 │   ├── common/                   # 共享枚举(TaskType/JobStatus/DatasetKind)+ 任务名常量
-│   ├── app-server/               # FastAPI 业务服务 + Alembic 迁移
+│   ├── app-server/               # FastAPI 业务服务 + db/migrations/ 编号 SQL 迁移
 │   ├── train-worker/             # Celery worker + 训练 recipe
 │   └── model-server/             # 在线推理服务(健康检查骨架)
 ├── frontend/                     # React + TS + Vite
@@ -85,13 +85,13 @@ pip install -e 'services/model-server[dev]'
 
 ### 3. 初始化数据库
 
+迁移在 app 启动时自动应用;也可手动:
+
 ```bash
-cd services/app-server && alembic upgrade head
-python -m app.bootstrap   # 写入权限目录/系统角色/初始超管(幂等)
-cd -
+cd services/app-server && python -m app.migrate   # 应用 db/migrations/ 下未执行的编号 SQL
 ```
 
-> 迁移建表,`bootstrap` 写种子数据。初始超管来自 `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`(默认 `admin@modelforge.local` / `admin12345`,生产务必改)。**所有业务端点都需登录**(`POST /auth/login` 拿 JWT,前端首屏即登录页)。`JWT_SECRET`、`INTERNAL_TOKEN`、MinIO 凭证等生产环境务必用 env 覆盖默认值。
+> `001_init_schema.sql` 建表、`002_seed_rbac.sql` 写种子(权限/角色/初始超管)。初始超管 `admin@modelforge.local` / `admin12345`(**首登后请改**)。生产环境务必用 env 覆盖 `JWT_SECRET`、`INTERNAL_TOKEN`、MinIO 凭证等默认值。**所有业务端点都需登录**。
 
 ### 4. 启动服务
 

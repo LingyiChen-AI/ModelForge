@@ -1,25 +1,26 @@
 # ModelForge — 项目约定
 
-## 数据库 schema 与 SQL 初始化文件
+## 数据库 schema 与编号 SQL 迁移
 
-- 权威 schema 来源 = `services/app-server` 的 SQLAlchemy 模型(`app/models/`),变更通过 Alembic 迁移落库。
-- **`services/app-server/db/init.sql`** 是从模型导出的完整建表 DDL(PostgreSQL),供从零初始化数据库使用。它是**自动生成**的,不要手改。
-- 生成/再生成命令:
-  ```bash
-  cd services/app-server && python scripts/dump_schema.py
-  ```
-  脚本无需数据库连接(把 ORM metadata 编译成 DDL),按外键依赖顺序输出。
+- 权威 schema 来源 = `services/app-server` 的 SQLAlchemy 模型(`app/models/`),供 app 查询使用。
+- 数据库变更通过 **`services/app-server/db/migrations/` 下的编号 SQL 文件**(`001_*.sql`、`002_*.sql`…)落库,由 `app/migrate.py` 的 runner 按编号顺序应用,`schema_migrations` 表记录已执行的文件。
+- runner 在 **app 启动时(连 PostgreSQL 且 `run_migrations_on_startup=True`)自动应用**未执行的迁移;也可手动 `cd services/app-server && python -m app.migrate`。
 
-### 铁律:schema 变更必须同步 init.sql
+### 铁律:改 schema 必须配一个编号 SQL 迁移
 
-**任何改动数据库结构后(改 `app/models/` 模型、加/改 Alembic 迁移、新增表或列),必须在同一次提交里重新生成 `db/init.sql`:**
+**任何改动数据库结构(改 `app/models/**`:加表/列/约束),必须在同一次提交里在 `services/app-server/db/migrations/` 新增一个【下一个编号】的 `.sql` 文件**,写对应的 `CREATE`/`ALTER`,并用幂等写法:
+- `CREATE TABLE IF NOT EXISTS ...`
+- `ALTER TABLE ... ADD COLUMN IF NOT EXISTS ...`
+- 数据用 `INSERT ... ON CONFLICT ... DO NOTHING`
 
-```bash
-cd services/app-server && python scripts/dump_schema.py
-git add db/init.sql
-```
+判断标准:`git diff` 动了 `app/models/**`,就必须同时包含一个新的 `db/migrations/NNN_*.sql`。**不要再用 Alembic。** 迁移只前进、不写 down;需要回退就再加一个补偿迁移。
 
-否则 `init.sql` 会与模型/迁移漂移。判断标准:`git diff` 里只要动了 `app/models/**` 或 `alembic/versions/**`,就必须同时包含 `db/init.sql` 的更新。
+### 种子数据
 
-- `init.sql` 只含 schema。种子数据(权限目录 / 系统角色 / 初始超管)由 `python -m app.bootstrap` 写入,**不**进 init.sql。
-- 注意 MLflow 复用同一个 PostgreSQL 库;`alembic/env.py` 的 `include_object` 过滤只让 autogenerate 处理本项目的表,`init.sql` 也只含本项目的表。
+- 生产种子(权限目录/系统角色/初始超管)= `db/migrations/002_seed_rbac.sql`,随迁移自动应用。
+- `app/bootstrap.py` 仅作**测试用程序化 seed**(SQLite 上 `bootstrap.seed(db)`);它与 `002_seed_rbac.sql` 的权限目录/角色必须保持一致。改种子时两处一起改。
+
+### 注意
+
+- MLflow 复用同一个 PostgreSQL 库;编号 SQL 只含本项目的表。
+- 测试用 SQLite + `Base.metadata.create_all`,不跑编号 SQL(PG 方言);`conftest.py` 已把 `run_migrations_on_startup` 关掉。
