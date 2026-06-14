@@ -1,3 +1,4 @@
+from typing import Literal
 from pydantic import BaseModel
 
 class UserCreate(BaseModel):
@@ -24,12 +25,12 @@ class PasswordReset(BaseModel):
 class RoleCreate(BaseModel):
     name: str
     description: str = ""
-    data_scope: str = "own"
+    data_scope: Literal["all", "own"] = "own"
     permission_codes: list[str] = []
 
 class RoleUpdate(BaseModel):
     description: str | None = None
-    data_scope: str | None = None
+    data_scope: Literal["all", "own"] | None = None
     permission_codes: list[str] | None = None
 
 class RoleOut(BaseModel):
