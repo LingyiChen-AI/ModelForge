@@ -10,6 +10,7 @@ from app.models.training import TrainingJob
 from app.schemas.training import TrainingJobCreate, TrainingJobOut
 from app.services import training_service
 from app.services.mlflow_sync import upsert_model_version_from_result
+from app.services.delete_service import delete_training_job
 
 router = APIRouter(prefix="/training-jobs", tags=["training"])
 
@@ -34,6 +35,16 @@ def get_job(job_id: int, user: User = Depends(require("training:read")),
     if not job:
         raise HTTPException(404, "not found")
     return job
+
+@router.delete("/{job_id}")
+def delete(job_id: int, cascade: bool = False, user: User = Depends(require("training:run")),
+           db: Session = Depends(get_db)):
+    job = db.execute(apply_scope(select(TrainingJob).where(TrainingJob.id == job_id),
+                                 TrainingJob, user)).scalar_one_or_none()
+    if not job:
+        raise HTTPException(404, "not found")
+    delete_training_job(db, job_id, cascade)
+    return {"deleted": True}
 
 class TrainResultIn(BaseModel):
     run_id: str

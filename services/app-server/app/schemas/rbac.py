@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 from pydantic import BaseModel
 
@@ -17,6 +18,7 @@ class UserOut(BaseModel):
     email: str
     role_id: int | None
     is_active: bool
+    created_at: datetime
     class Config: from_attributes = True
 
 class PasswordReset(BaseModel):
@@ -29,6 +31,7 @@ class RoleCreate(BaseModel):
     permission_codes: list[str] = []
 
 class RoleUpdate(BaseModel):
+    name: str | None = None
     description: str | None = None
     data_scope: Literal["all", "own"] | None = None
     permission_codes: list[str] | None = None
@@ -41,6 +44,7 @@ class RoleOut(BaseModel):
     is_system: bool
     is_builtin: bool
     permissions: list[str]
+    created_at: datetime
 
 class PermissionOut(BaseModel):
     code: str

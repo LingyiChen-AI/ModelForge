@@ -31,6 +31,11 @@ app.add_middleware(
 def health():
     return {"status": "ok"}
 
+@app.get("/config")
+def public_config():
+    # Non-sensitive client config (e.g. MLflow UI base for deep-links).
+    return {"mlflow_url": settings.mlflow_tracking_uri}
+
 from app.api import datasets
 app.include_router(datasets.router)
 
@@ -39,6 +44,7 @@ app.include_router(training.router)
 
 from app.api import models
 app.include_router(models.router)
+app.include_router(models.models_router)
 
 from app.api import eval as eval_api
 app.include_router(eval_api.router)
@@ -54,3 +60,6 @@ app.include_router(users.router)
 
 from app.api import roles
 app.include_router(roles.router)
+
+from app.api import stats
+app.include_router(stats.router)

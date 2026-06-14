@@ -1,10 +1,10 @@
 from sqlalchemy import ForeignKey, UniqueConstraint, JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin
+from app.models.base import Base, TimestampMixin, CreatorMixin
 
 
-class Dataset(Base, TimestampMixin):
+class Dataset(Base, TimestampMixin, CreatorMixin):
     __tablename__ = "datasets"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -20,7 +20,7 @@ class Dataset(Base, TimestampMixin):
     )
 
 
-class DatasetVersion(Base, TimestampMixin):
+class DatasetVersion(Base, TimestampMixin, CreatorMixin):
     __tablename__ = "dataset_versions"
     __table_args__ = (UniqueConstraint("dataset_id", "version_no"),)
 
@@ -32,4 +32,7 @@ class DatasetVersion(Base, TimestampMixin):
     checksum: Mapped[str] = mapped_column()
     stats: Mapped[dict] = mapped_column(JSON, default=dict)
     note: Mapped[str] = mapped_column(default="")
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
     dataset: Mapped["Dataset"] = relationship(back_populates="versions")

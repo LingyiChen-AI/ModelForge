@@ -3,15 +3,18 @@ from sentence_transformers import SentenceTransformer
 from worker.evaluators.base import Evaluator
 
 class EmbeddingEvaluator(Evaluator):
-    def evaluate(self, model_dir: str, df, ks=(1, 3, 5)) -> dict:
+    def evaluate(self, model_dir: str, df, on_progress=None, ks=(1, 3, 5)) -> dict:
         model = SentenceTransformer(model_dir)
         corpus, gold = [], []
         for _, r in df.reset_index(drop=True).iterrows():
             gold.append(len(corpus))
             corpus.extend(r["pos"])
         queries = df["query"].tolist()
+        if on_progress: on_progress(0.2)
         qe = model.encode(queries, normalize_embeddings=True)
+        if on_progress: on_progress(0.6)
         ce = model.encode(corpus, normalize_embeddings=True)
+        if on_progress: on_progress(0.95)
         sims = qe @ ce.T
         ranks = np.argsort(-sims, axis=1)
         out = {}

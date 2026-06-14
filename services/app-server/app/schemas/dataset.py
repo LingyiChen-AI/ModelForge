@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel
 from modelforge_common.enums import TaskType, DatasetKind
 
@@ -13,6 +14,8 @@ class DatasetOut(BaseModel):
     name: str
     kind: str
     task_type: str
+    created_at: datetime
+    created_by_name: str | None = None
 
     class Config:
         from_attributes = True
@@ -26,6 +29,8 @@ class DatasetVersionOut(BaseModel):
     row_count: int
     checksum: str
     note: str
+    created_at: datetime
+    created_by_name: str | None = None
 
     class Config:
         from_attributes = True

@@ -6,7 +6,8 @@ def test_eval_task_orchestration(tmp_path, monkeypatch):
     eng = create_engine(f"sqlite:///{tmp_path}/t.db")
     with eng.begin() as c:
         c.execute(text("CREATE TABLE eval_runs (id INTEGER PRIMARY KEY, model_version_id INTEGER, "
-                       "dataset_version_id INTEGER, status TEXT, results TEXT, error TEXT, metric_config TEXT)"))
+                       "dataset_version_id INTEGER, status TEXT, progress REAL DEFAULT 0, "
+                       "results TEXT, error TEXT, metric_config TEXT)"))
         c.execute(text("CREATE TABLE model_versions (id INTEGER PRIMARY KEY, mlflow_model_name TEXT, "
                        "mlflow_version TEXT, task_type TEXT)"))
         c.execute(text("CREATE TABLE dataset_versions (id INTEGER PRIMARY KEY, storage_uri TEXT)"))
@@ -19,7 +20,7 @@ def test_eval_task_orchestration(tmp_path, monkeypatch):
     monkeypatch.setattr(tasks, "read_snapshot",
                         lambda uri: pd.DataFrame({"text": ["a"], "label": ["x"]}))
     monkeypatch.setattr(tasks, "run_evaluator",
-                        lambda task_type, model_dir, df: {"accuracy": 0.75, "f1": 0.7})
+                        lambda *a, **k: {"accuracy": 0.75, "f1": 0.7})
 
     tasks.eval_task.run(eval_run_id=1)
 

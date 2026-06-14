@@ -1,47 +1,51 @@
 import { useEffect, useState } from "react";
-import { Database, Plus, ChevronRight } from "lucide-react";
-import { listDatasets, createDataset, type Dataset } from "../api/client";
-import { Button, Card, EmptyState, Field, Input, Select, Badge, PageHeader, TableShell } from "../ui";
+import { Database, Plus, ChevronRight, Download } from "lucide-react";
+import { listDatasets, createDataset, downloadTemplateByType, type Dataset, type TemplateFormat } from "../api/client";
+import { Button, Drawer, EmptyState, Field, Input, Select, Badge, PageHeader, TableShell, Creator, CreatedAt } from "../ui";
+import { toastError } from "../toast";
 import { useAuth } from "../context/AuthContext";
 import { navigate } from "../router";
+
+const TEMPLATE_FORMATS: { fmt: TemplateFormat; label: string }[] = [
+  { fmt: "csv", label: "CSV" }, { fmt: "jsonl", label: "JSONL" }, { fmt: "xlsx", label: "Excel" },
+];
 
 const TASK_TONE: Record<string, "blue" | "violet" | "cyan" | "amber"> = {
   classification: "blue", ner: "violet", pair: "cyan", embedding: "amber",
 };
+const KIND_LABEL: Record<string, string> = { train: "训练集", eval: "评估集", test: "测试集" };
 
 export function DatasetsPage() {
   const { can } = useAuth();
   const [items, setItems] = useState<Dataset[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [name, setName] = useState("");
   const [kind, setKind] = useState("train");
   const [taskType, setTaskType] = useState("classification");
   const reload = () => listDatasets().then(setItems);
-  useEffect(() => { reload(); }, []);
+  useEffect(() => { reload().finally(() => setLoading(false)); }, []);
 
-  const create = () =>
-    createDataset({ name, kind, task_type: taskType }).then(() => { setName(""); reload(); });
+  const openDrawer = () => { setName(""); setKind("train"); setTaskType("classification"); setBusy(false); setOpen(true); };
+  const create = () => {
+    setBusy(true);
+    createDataset({ name, kind, task_type: taskType }).then(() => { setOpen(false); reload(); })
+      .catch(() => toastError("创建失败")).finally(() => setBusy(false));
+  };
 
   return (
     <>
-      <PageHeader title="数据集" subtitle="训练集与评估集统一管理,每次上传生成不可变版本快照。" />
-
-      {can("dataset:write") && (
-        <Card className="mb-5 p-4">
-          <div className="flex flex-wrap items-end gap-3">
-            <div className="grow min-w-[200px]"><Field label="名称"><Input placeholder="如 intent-train" value={name} onChange={e => setName(e.target.value)} /></Field></div>
-            <Field label="类型"><Select value={kind} onChange={e => setKind(e.target.value)}><option value="train">训练集</option><option value="eval">评估集</option></Select></Field>
-            <Field label="任务"><Select value={taskType} onChange={e => setTaskType(e.target.value)}>
-              <option value="classification">分类</option><option value="ner">序列标注</option>
-              <option value="pair">句对</option><option value="embedding">向量</option>
-            </Select></Field>
-            <Button variant="primary" disabled={!name} onClick={create}><Plus size={16} /> 新建数据集</Button>
-          </div>
-        </Card>
-      )}
+      <PageHeader
+        title="数据集"
+        subtitle="训练集与评估集统一管理,每次上传生成不可变版本快照。"
+        actions={can("dataset:write") && <Button variant="primary" onClick={openDrawer}><Plus size={16} /> 新建数据集</Button>}
+      />
 
       <TableShell
+        loading={loading}
         empty={items.length === 0}
-        head={<><th>名称</th><th>类型</th><th>任务</th><th className="w-10"></th></>}
+        head={<><th>名称</th><th>类型</th><th>任务</th><th>创建者</th><th className="w-36">创建时间</th><th className="w-10"></th></>}
       >
         {items.length === 0 ? (
           <EmptyState icon={<Database size={22} />} title="还没有数据集" hint="新建一个数据集,然后上传 CSV / JSONL 生成第一个版本。" />
@@ -53,12 +57,50 @@ export function DatasetsPage() {
                 <span className="font-medium text-slate-800">{d.name}</span>
               </div>
             </td>
-            <td><span className="text-slate-500">{d.kind === "eval" ? "评估集" : "训练集"}</span></td>
+            <td><span className="text-slate-500">{KIND_LABEL[d.kind] ?? d.kind}</span></td>
             <td><Badge tone={TASK_TONE[d.task_type] ?? "gray"}>{d.task_type}</Badge></td>
+            <td><Creator name={d.created_by_name} /></td>
+            <td><CreatedAt at={d.created_at} /></td>
             <td className="text-slate-300"><ChevronRight size={16} /></td>
           </tr>
         ))}
       </TableShell>
+
+      <Drawer
+        open={open}
+        onClose={() => setOpen(false)}
+        title="新建数据集"
+        subtitle="先创建数据集,再进入详情上传 CSV / JSONL 生成版本。"
+        footer={
+          <div className="flex items-center justify-end gap-2">
+            <Button variant="subtle" disabled={busy} onClick={() => setOpen(false)}>取消</Button>
+            <Button variant="primary" disabled={!name} loading={busy} onClick={create}><Plus size={16} /> 创建</Button>
+          </div>
+        }
+      >
+        <div className="flex flex-col gap-4">
+          <Field label="名称"><Input placeholder="如 intent-train" value={name} onChange={e => setName(e.target.value)} /></Field>
+          <Field label="类型"><Select value={kind} onChange={e => setKind(e.target.value)}>
+            <option value="train">训练集</option><option value="eval">评估集</option><option value="test">测试集</option>
+          </Select></Field>
+          <Field label="任务"><Select value={taskType} onChange={e => setTaskType(e.target.value)}>
+            <option value="classification">分类</option><option value="ner">序列标注</option>
+            <option value="pair">句对</option><option value="embedding">向量</option>
+          </Select></Field>
+
+          <div className="rounded-lg bg-slate-50 px-3 py-2.5">
+            <div className="mb-2 text-[12px] text-slate-500">下载该任务类型的数据模板(列格式按所选任务生成)</div>
+            <div className="flex items-center gap-2">
+              {TEMPLATE_FORMATS.map(t => (
+                <Button key={t.fmt} size="sm" variant="subtle"
+                        onClick={() => downloadTemplateByType(taskType, t.fmt).catch(() => toastError("下载失败"))}>
+                  <Download size={13} /> {t.label}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </div>
+      </Drawer>
     </>
   );
 }

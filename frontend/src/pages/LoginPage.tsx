@@ -46,7 +46,7 @@ export function LoginPage() {
             {err && (
               <div className="rounded-lg bg-red-50 px-3 py-2 text-[13px] text-red-600 ring-1 ring-red-100">{err}</div>
             )}
-            <Button type="submit" variant="primary" disabled={busy || !email || !pw} className="h-10 mt-1">
+            <Button type="submit" variant="primary" disabled={!email || !pw} loading={busy} className="h-10 mt-1">
               <LogIn size={16} /> {busy ? "登录中…" : "登录"}
             </Button>
           </form>

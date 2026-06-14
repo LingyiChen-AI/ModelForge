@@ -23,6 +23,11 @@ def test_role_crud(session_factory):
     rid = r.json()["id"]
     r = c.patch(f"/roles/{rid}", json={"permission_codes":["dataset:read"]}, headers=H)
     assert set(r.json()["permissions"]) == {"dataset:read"}
+    # rename + change data_scope on a custom role
+    r = c.patch(f"/roles/{rid}", json={"name":"annotator","data_scope":"all"}, headers=H)
+    assert r.status_code == 200 and r.json()["name"] == "annotator" and r.json()["data_scope"] == "all"
+    # rename collision with an existing role → 409
+    assert c.patch(f"/roles/{rid}", json={"name":"superadmin"}, headers=H).status_code == 409
     assert c.patch(f"/roles/{sa_id}", json={"description":"x"}, headers=H).status_code == 400
     assert c.delete(f"/roles/{sa_id}", headers=H).status_code == 400
     assert c.delete(f"/roles/{rid}", headers=H).status_code == 200

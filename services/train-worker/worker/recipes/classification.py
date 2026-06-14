@@ -2,12 +2,12 @@ import json, os
 import numpy as np
 from datasets import Dataset as HFDataset
 from transformers import (AutoTokenizer, AutoModelForSequenceClassification,
-                          TrainingArguments, Trainer)
+                          TrainingArguments, Trainer, DataCollatorWithPadding)
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
-from worker.recipes.base import Recipe, TrainResult
+from worker.recipes.base import Recipe, TrainResult, hf_progress_callback
 
 class ClassificationRecipe(Recipe):
-    def train(self, df, base_model, hyperparams, output_dir) -> TrainResult:
+    def train(self, df, base_model, hyperparams, output_dir, on_progress=None, eval_df=None) -> TrainResult:
         labels = sorted(df["label"].unique().tolist())
         label2id = {l: i for i, l in enumerate(labels)}
         df = df.assign(_y=df["label"].map(label2id))
@@ -15,8 +15,13 @@ class ClassificationRecipe(Recipe):
 
         tok = AutoTokenizer.from_pretrained(base_model)
         def tok_fn(b): return tok(b["text"], truncation=True, max_length=max_len)
-        hf = HFDataset.from_pandas(df[["text", "_y"]].rename(columns={"_y": "labels"}))
-        hf = hf.map(tok_fn, batched=True)
+        def build(frame):
+            f = frame.assign(_y=frame["label"].map(label2id)).dropna(subset=["_y"])
+            f = f.assign(_y=f["_y"].astype(int))
+            return HFDataset.from_pandas(f[["text", "_y"]].rename(columns={"_y": "labels"})).map(tok_fn, batched=True)
+        hf = build(df)
+        # held-out eval set if provided (labels mapped via train's label space)
+        eval_hf = build(eval_df) if eval_df is not None else hf
 
         model = AutoModelForSequenceClassification.from_pretrained(
             base_model, num_labels=len(labels),
@@ -34,8 +39,11 @@ class ClassificationRecipe(Recipe):
             per_device_eval_batch_size=int(hyperparams.get("batch_size", 16)),
             learning_rate=float(hyperparams.get("lr", 5e-5)),
             report_to=[], logging_steps=10, save_strategy="no")
-        trainer = Trainer(model=model, args=args, train_dataset=hf, eval_dataset=hf,
-                          compute_metrics=metrics_fn)
+        trainer = Trainer(model=model, args=args, train_dataset=hf, eval_dataset=eval_hf,
+                          compute_metrics=metrics_fn,
+                          data_collator=DataCollatorWithPadding(tok))
+        if on_progress:
+            trainer.add_callback(hf_progress_callback(on_progress))
         trainer.train()
         metrics = trainer.evaluate()
         metrics = {k.replace("eval_", ""): v for k, v in metrics.items()}

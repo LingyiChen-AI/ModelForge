@@ -7,8 +7,9 @@ class TaskType(str, Enum):
     EMBEDDING = "embedding"
 
 class DatasetKind(str, Enum):
-    TRAIN = "train"
-    EVAL = "eval"
+    TRAIN = "train"      # 训练集 — model training
+    EVAL = "eval"        # 评估集 — validation during training
+    TEST = "test"        # 测试集 — model testing (model-test page)
 
 class JobStatus(str, Enum):
     PENDING = "pending"

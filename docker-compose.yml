@@ -27,20 +27,21 @@ services:
     ports: ["9000:9000", "9001:9001"]
     volumes: ["miniodata:/data"]
 
+  # MLflow 3.x. sqlite backend store(容器内卷),模型产物由客户端直传 MinIO
+  # 的 mlflow 桶(--no-serve-artifacts),故 server 端无需 S3 凭证/boto3。
+  # 升级镜像 tag 前先对卷里的 sqlite 跑 `mlflow db upgrade`。
   mlflow:
-    image: ghcr.io/mlflow/mlflow:v2.16.2
-    depends_on: [postgres, minio]
-    environment:
-      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
-      AWS_ACCESS_KEY_ID: minioadmin
-      AWS_SECRET_ACCESS_KEY: minioadmin
+    image: ghcr.io/mlflow/mlflow:v3.13.0
+    container_name: modelforge-mlflow
+    depends_on: [minio]
     command: >
-      bash -c "pip install boto3 psycopg2-binary &&
-      mlflow server --host 0.0.0.0 --port 5000
-      --backend-store-uri postgresql://modelforge:modelforge@postgres/modelforge
-      --default-artifact-root s3://mlflow/"
-    ports: ["5000:5000"]
+      bash -c "mlflow server --host 0.0.0.0 --port 5000
+      --backend-store-uri sqlite:////mlflow/mlflow.db
+      --default-artifact-root s3://mlflow/ --no-serve-artifacts"
+    volumes: ["mlflowdata:/mlflow"]
+    ports: ["5500:5000"]
 
 volumes:
   pgdata:
   miniodata:
+  mlflowdata:

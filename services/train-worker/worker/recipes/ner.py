@@ -4,10 +4,10 @@ from datasets import Dataset as HFDataset
 from transformers import (AutoTokenizer, AutoModelForTokenClassification,
                           TrainingArguments, Trainer, DataCollatorForTokenClassification)
 from seqeval.metrics import accuracy_score, f1_score, precision_score, recall_score
-from worker.recipes.base import Recipe, TrainResult
+from worker.recipes.base import Recipe, TrainResult, hf_progress_callback
 
 class NERRecipe(Recipe):
-    def train(self, df, base_model, hyperparams, output_dir) -> TrainResult:
+    def train(self, df, base_model, hyperparams, output_dir, on_progress=None, eval_df=None) -> TrainResult:
         tag_set = sorted({t for row in df["tags"] for t in row})
         tag2id = {t: i for i, t in enumerate(tag_set)}
         id2tag = {i: t for t, i in tag2id.items()}
@@ -25,7 +25,7 @@ class NERRecipe(Recipe):
                     if wid is None:
                         seq.append(-100)
                     elif wid != prev:
-                        seq.append(tag2id[tags[wid]])
+                        seq.append(tag2id.get(tags[wid], 0))
                     else:
                         seq.append(-100)
                     prev = wid
@@ -33,8 +33,11 @@ class NERRecipe(Recipe):
             enc["labels"] = labels
             return enc
 
-        hf = HFDataset.from_pandas(df[["tokens", "tags"]])
-        hf = hf.map(encode, batched=True, remove_columns=hf.column_names)
+        def build(frame):
+            hh = HFDataset.from_pandas(frame[["tokens", "tags"]])
+            return hh.map(encode, batched=True, remove_columns=hh.column_names)
+        hf = build(df)
+        eval_hf = build(eval_df) if eval_df is not None else hf
         model = AutoModelForTokenClassification.from_pretrained(
             base_model, num_labels=len(tag_set), id2label=id2tag, label2id=tag2id)
         collator = DataCollatorForTokenClassification(tok)
@@ -58,8 +61,10 @@ class NERRecipe(Recipe):
             per_device_eval_batch_size=int(hyperparams.get("batch_size", 16)),
             learning_rate=float(hyperparams.get("lr", 5e-5)),
             report_to=[], logging_steps=10, save_strategy="no")
-        trainer = Trainer(model=model, args=args, train_dataset=hf, eval_dataset=hf,
+        trainer = Trainer(model=model, args=args, train_dataset=hf, eval_dataset=eval_hf,
                           data_collator=collator, compute_metrics=metrics_fn)
+        if on_progress:
+            trainer.add_callback(hf_progress_callback(on_progress))
         trainer.train()
         metrics = {k.replace("eval_", ""): float(v) for k, v in trainer.evaluate().items()
                    if isinstance(v, (int, float))}

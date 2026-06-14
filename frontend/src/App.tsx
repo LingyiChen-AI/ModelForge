@@ -1,3 +1,4 @@
+import { DashboardPage } from "./pages/DashboardPage";
 import { DatasetsPage } from "./pages/DatasetsPage";
 import { DatasetDetailPage } from "./pages/DatasetDetailPage";
 import { TrainingPage } from "./pages/TrainingPage";
@@ -27,8 +28,9 @@ export default function App() {
   if (!me) { window.location.href = "/login"; return null; }
 
   const detail = path.match(/^\/datasets\/(\d+)$/);
-  let page = <DatasetsPage />;
+  let page = <DashboardPage />;
   if (detail) page = <DatasetDetailPage id={Number(detail[1])} />;
+  else if (path === "/datasets") page = <DatasetsPage />;
   else if (path === "/training") page = <TrainingPage />;
   else if (path === "/models") page = <ModelsPage />;
   else if (path === "/eval") page = <EvalPage />;

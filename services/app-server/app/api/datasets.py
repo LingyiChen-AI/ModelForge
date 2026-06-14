@@ -1,14 +1,15 @@
 import io, pandas as pd
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Response
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from modelforge_common.enums import TaskType
 from app.db import get_db
 from app.authz import require, apply_scope
 from app.storage import build_storage
 from app.models.user import User
 from app.models.dataset import Dataset, DatasetVersion
 from app.schemas.dataset import DatasetCreate, DatasetOut, DatasetVersionOut
-from app.services.dataset_service import create_version
+from app.services.dataset_service import create_version, serialize_template, serialize_df
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
@@ -33,11 +34,40 @@ def list_datasets(user: User = Depends(require("dataset:read")), db: Session = D
 
 def _read_upload(file: UploadFile) -> pd.DataFrame:
     raw = file.file.read()
-    if file.filename.endswith(".csv"):
+    name = (file.filename or "").lower()
+    if name.endswith(".csv"):
         return pd.read_csv(io.BytesIO(raw))
-    if file.filename.endswith(".jsonl"):
+    if name.endswith(".jsonl"):
         return pd.read_json(io.BytesIO(raw), lines=True)
-    raise HTTPException(400, "only .csv or .jsonl supported")
+    if name.endswith(".xlsx"):
+        return pd.read_excel(io.BytesIO(raw))
+    raise HTTPException(400, "only .csv, .jsonl or .xlsx supported")
+
+
+def _template_response(task_type: TaskType, fmt: str, filename_stem: str) -> Response:
+    if fmt not in ("csv", "jsonl", "xlsx"):
+        raise HTTPException(400, "fmt must be csv | jsonl | xlsx")
+    content, media_type, ext = serialize_template(task_type, fmt)
+    return Response(content=content, media_type=media_type,
+                    headers={"Content-Disposition": f'attachment; filename="{filename_stem}.{ext}"'})
+
+
+@router.get("/template")
+def download_template_by_type(task_type: str, fmt: str = "csv",
+                              _: User = Depends(require("dataset:read"))):
+    try:
+        tt = TaskType(task_type)
+    except ValueError:
+        raise HTTPException(400, f"invalid task_type: {task_type}")
+    return _template_response(tt, fmt, f"{task_type}-template")
+
+
+@router.get("/{dataset_id}/template")
+def download_template(dataset_id: int, fmt: str = "csv",
+                      user: User = Depends(require("dataset:read")),
+                      db: Session = Depends(get_db)):
+    ds = _get_owned_dataset(db, dataset_id, user)
+    return _template_response(TaskType(ds.task_type), fmt, f"dataset-{dataset_id}-template")
 
 @router.post("/{dataset_id}/versions", response_model=DatasetVersionOut, status_code=201)
 def upload_version(dataset_id: int, file: UploadFile = File(...), note: str = Form(""),
@@ -45,7 +75,7 @@ def upload_version(dataset_id: int, file: UploadFile = File(...), note: str = Fo
     ds = _get_owned_dataset(db, dataset_id, user)
     df = _read_upload(file)
     try:
-        return create_version(db, build_storage(), ds, df, note)
+        return create_version(db, build_storage(), ds, df, note, created_by=user.id)
     except ValueError as e:
         raise HTTPException(422, str(e))
 
@@ -56,3 +86,19 @@ def list_versions(dataset_id: int, user: User = Depends(require("dataset:read"))
     return db.execute(select(DatasetVersion)
                       .where(DatasetVersion.dataset_id == dataset_id)
                       .order_by(DatasetVersion.version_no.desc())).scalars().all()
+
+
+@router.get("/{dataset_id}/versions/{version_id}/download")
+def download_version(dataset_id: int, version_id: int, fmt: str = "csv",
+                     user: User = Depends(require("dataset:read")), db: Session = Depends(get_db)):
+    ds = _get_owned_dataset(db, dataset_id, user)
+    ver = db.execute(select(DatasetVersion).where(
+        DatasetVersion.id == version_id, DatasetVersion.dataset_id == dataset_id)).scalar_one_or_none()
+    if not ver:
+        raise HTTPException(404, "version not found")
+    if fmt not in ("csv", "jsonl", "xlsx"):
+        raise HTTPException(400, "fmt must be csv | jsonl | xlsx")
+    df = build_storage().read_snapshot(ver.storage_uri)
+    content, media_type, ext = serialize_df(df, TaskType(ds.task_type), fmt)
+    return Response(content=content, media_type=media_type,
+                    headers={"Content-Disposition": f'attachment; filename="dataset-{dataset_id}-v{ver.version_no}.{ext}"'})

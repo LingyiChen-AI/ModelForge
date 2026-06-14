@@ -20,7 +20,7 @@ def log_and_register(*, job_name: str, base_model: str, hyperparams: dict,
                      metrics: dict, artifact_dir: str) -> tuple[str, str, str]:
     _configure_mlflow_s3_env()
     mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
-    model_name = f"ModelForge-{job_name}"
+    model_name = job_name  # use the job's timestamp name verbatim
     with mlflow.start_run(run_name=job_name) as run:
         mlflow.log_params({"base_model": base_model, **hyperparams})
         mlflow.log_metrics({k: float(v) for k, v in metrics.items()

@@ -39,3 +39,9 @@ def test_create_eval_run(tmp_path, monkeypatch):
     body = r.json()
     assert body["status"] == "pending" and body["celery_task_id"] == "celery-eval-1"
     assert sent["run"] == body["id"]
+
+    # delete the eval run
+    run_id = body["id"]
+    rd = c.delete(f"/eval-runs/{run_id}", headers=H)
+    assert rd.status_code == 204
+    assert c.get(f"/eval-runs/{run_id}", headers=H).status_code == 404

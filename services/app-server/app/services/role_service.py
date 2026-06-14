@@ -25,6 +25,10 @@ def update_role(db: Session, role_id: int, body) -> Role:
         raise ValueError("role not found")
     if r.is_system:
         raise PermissionError("system role is immutable")
+    if body.name is not None and body.name != r.name:
+        if db.execute(select(Role).where(Role.name == body.name, Role.id != role_id)).scalar_one_or_none():
+            raise ValueError("role name exists")
+        r.name = body.name
     if body.description is not None:
         r.description = body.description
     if body.data_scope is not None:

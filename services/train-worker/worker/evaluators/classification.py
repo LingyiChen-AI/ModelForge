@@ -1,24 +1,32 @@
 import json, os
 import numpy as np
-import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from sklearn.metrics import accuracy_score, precision_recall_fscore_support
-from worker.evaluators.base import Evaluator
+from worker.evaluators.base import Evaluator, batched_logits
 
 class ClassificationEvaluator(Evaluator):
-    def evaluate(self, model_dir: str, df) -> dict:
+    def evaluate(self, model_dir: str, df, on_progress=None) -> dict:
         with open(os.path.join(model_dir, "label_map.json")) as f:
             label2id = json.load(f)
         tok = AutoTokenizer.from_pretrained(model_dir)
         model = AutoModelForSequenceClassification.from_pretrained(model_dir)
         model.eval()
         texts = df["text"].tolist()
-        enc = tok(texts, truncation=True, padding=True, max_length=256, return_tensors="pt")
-        with torch.no_grad():
-            logits = model(**enc).logits.cpu().numpy()
+        def encode(i, j): return tok(texts[i:j], truncation=True, padding=True, max_length=256, return_tensors="pt")
+        logits = batched_logits(model, encode, len(texts), on_progress)
         pred = np.argmax(logits, axis=-1)
-        y = df["label"].map(label2id).to_numpy()
-        p, r, f1, _ = precision_recall_fscore_support(y, pred, average="macro", zero_division=0)
-        return {"accuracy": float(accuracy_score(y, pred)),
-                "precision": float(p), "recall": float(r), "f1": float(f1),
-                "n_samples": int(len(df))}
+        # map test labels through the model's OWN label_map so 中文↔id always lines up;
+        # a label the model never trained on maps to -1 (sentinel) and counts as wrong,
+        # never silently dropped — otherwise metrics would be inaccurate.
+        mapped = df["label"].map(label2id)
+        unmapped = int(mapped.isna().sum())
+        y = mapped.fillna(-1).astype(int).to_numpy()
+        known = list(range(len(label2id)))  # restrict averaged classes to trained labels
+        p, r, f1, _ = precision_recall_fscore_support(
+            y, pred, labels=known, average="macro", zero_division=0)
+        out = {"accuracy": float(accuracy_score(y, pred)),
+               "precision": float(p), "recall": float(r), "f1": float(f1),
+               "n_samples": int(len(df))}
+        if unmapped:
+            out["unknown_labels"] = unmapped  # rows whose 中文 label is outside the model's label space
+        return out

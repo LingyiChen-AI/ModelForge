@@ -13,7 +13,8 @@ router = APIRouter(tags=["roles"])
 def _role_out(r: Role) -> RoleOut:
     return RoleOut(id=r.id, name=r.name, description=r.description,
                    data_scope=r.data_scope, is_system=r.is_system, is_builtin=r.is_builtin,
-                   permissions=sorted(p.code for p in r.permissions))
+                   permissions=sorted(p.code for p in r.permissions),
+                   created_at=r.created_at)
 
 @router.get("/permissions", response_model=list[PermissionOut])
 def list_permissions(_: User = Depends(require("role:manage")), db: Session = Depends(get_db)):
@@ -37,7 +38,9 @@ def update(role_id: int, body: RoleUpdate, _: User = Depends(require("role:manag
     try:
         return _role_out(role_service.update_role(db, role_id, body))
     except ValueError as e:
-        raise HTTPException(404, str(e))
+        msg = str(e)
+        code = 404 if "not found" in msg else (409 if "exists" in msg else 422)
+        raise HTTPException(code, msg)
     except PermissionError as e:
         raise HTTPException(400, str(e))
 

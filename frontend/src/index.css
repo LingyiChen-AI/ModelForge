@@ -61,12 +61,12 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); }
   .label { @apply text-[13px] font-medium text-slate-600; }
 
-  .badge { @apply inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-semibold leading-5 ring-1; }
+  .badge { @apply inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[11.5px] font-semibold leading-5 ring-1; }
 
   .tbl { @apply w-full text-sm; }
   .tbl thead th {
-    @apply text-left text-[11.5px] font-semibold uppercase tracking-wider text-slate-400
-           px-4 py-2.5 border-b border-slate-200 bg-slate-50/60;
+    @apply whitespace-nowrap text-left text-[11.5px] font-semibold uppercase tracking-wide text-slate-500
+           px-4 py-3 border-b border-slate-200 bg-slate-50/60;
   }
   .tbl tbody td { @apply px-4 py-3 border-b border-slate-100 text-slate-700 align-middle; }
   .tbl tbody tr { @apply transition-colors hover:bg-slate-50/80; }

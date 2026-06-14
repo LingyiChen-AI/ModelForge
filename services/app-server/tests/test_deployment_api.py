@@ -32,6 +32,14 @@ def test_create_and_stop_deployment(tmp_path, monkeypatch):
     body = r.json()
     assert body["status"] == "running" and calls["load"] == mv_id
 
+    # a model version can only be deployed once — second deploy is rejected
+    dup = c.post("/deployments", json={"model_version_id": mv_id}, headers=H)
+    assert dup.status_code == 422 and "已有部署" in dup.json()["detail"]
+
     r = c.post(f"/deployments/{body['id']}/stop", headers=H)
     assert r.status_code == 200 and r.json()["status"] == "stopped"
     assert calls["unload"] == mv_id
+
+    # even after stop, the existing deployment blocks a new one (use start instead)
+    dup2 = c.post("/deployments", json={"model_version_id": mv_id}, headers=H)
+    assert dup2.status_code == 422

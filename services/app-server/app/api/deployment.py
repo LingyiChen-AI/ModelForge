@@ -7,6 +7,7 @@ from app.models.user import User
 from app.models.training import Deployment
 from app.schemas.deployment import DeploymentCreate, DeploymentOut
 from app.services import deployment_service
+from app.services.delete_service import delete_deployment
 
 router = APIRouter(prefix="/deployments", tags=["deployment"])
 
@@ -23,6 +24,18 @@ def list_deployments(user: User = Depends(require("deploy:read")), db: Session =
     return db.execute(apply_scope(select(Deployment).order_by(Deployment.id.desc()),
                                   Deployment, user)).scalars().all()
 
+@router.post("/{deployment_id}/start", response_model=DeploymentOut)
+def start(deployment_id: int, user: User = Depends(require("deploy:write")),
+          db: Session = Depends(get_db)):
+    dep = db.execute(apply_scope(select(Deployment).where(Deployment.id == deployment_id),
+                                 Deployment, user)).scalar_one_or_none()
+    if not dep:
+        raise HTTPException(404, "deployment not found")
+    try:
+        return deployment_service.start(db, deployment_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
 @router.post("/{deployment_id}/stop", response_model=DeploymentOut)
 def stop(deployment_id: int, user: User = Depends(require("deploy:write")),
          db: Session = Depends(get_db)):
@@ -34,3 +47,13 @@ def stop(deployment_id: int, user: User = Depends(require("deploy:write")),
         return deployment_service.stop(db, deployment_id)
     except ValueError as e:
         raise HTTPException(404, str(e))
+
+@router.delete("/{deployment_id}")
+def delete(deployment_id: int, user: User = Depends(require("deploy:write")),
+           db: Session = Depends(get_db)):
+    dep = db.execute(apply_scope(select(Deployment).where(Deployment.id == deployment_id),
+                                 Deployment, user)).scalar_one_or_none()
+    if not dep:
+        raise HTTPException(404, "deployment not found")
+    delete_deployment(db, deployment_id)
+    return {"deleted": True}

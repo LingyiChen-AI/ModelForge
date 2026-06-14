@@ -8,7 +8,7 @@ def upsert_model_version_from_result(db: Session, training_job_id: int,
     if not job:
         raise ValueError("training job not found")
     mv = ModelVersion(
-        name=result["model_name"], source_training_job_id=job.id,
+        name=result["model_name"], model_id=job.model_id, source_training_job_id=job.id,
         mlflow_model_name=result["model_name"], mlflow_version=str(result["version"]),
         task_type=job.task_type, base_model=job.base_model,
         train_metrics=result.get("metrics", {}),

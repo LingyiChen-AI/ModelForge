@@ -9,5 +9,6 @@ class PairPredictor(Predictor):
         a = [p[0] for p in pairs]; b = [p[1] for p in pairs]
         enc = self.tok(a, b, truncation=True, padding=True, max_length=256, return_tensors="pt")
         with torch.no_grad():
-            logits = self.model(**enc).logits.reshape(-1).cpu().numpy()
-        return [float(x) for x in logits]
+            # regression head outputs an unbounded logit — squash to a (0,1) similarity
+            scores = torch.sigmoid(self.model(**enc).logits.reshape(-1)).cpu().numpy()
+        return [float(x) for x in scores]

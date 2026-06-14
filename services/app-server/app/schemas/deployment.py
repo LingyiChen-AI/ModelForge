@@ -1,3 +1,4 @@
+from datetime import datetime
 from pydantic import BaseModel
 
 class DeploymentCreate(BaseModel):
@@ -10,5 +11,7 @@ class DeploymentOut(BaseModel):
     status: str
     endpoint: str | None
     error: str | None
+    created_at: datetime
+    created_by_name: str | None = None
     class Config:
         from_attributes = True
