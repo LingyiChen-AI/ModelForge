@@ -1,6 +1,19 @@
 from fastapi import FastAPI
 
-app = FastAPI(title="ModelForge app-server")
+from contextlib import asynccontextmanager
+from app.config import settings
+from app.db import engine
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    if settings.run_migrations_on_startup and engine.dialect.name == "postgresql":
+        from app.migrate import run_migrations
+        run_migrations(engine)
+    yield
+
+
+app = FastAPI(title="ModelForge app-server", lifespan=lifespan)
 
 @app.get("/health")
 def health():

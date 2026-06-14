@@ -12,6 +12,9 @@ from app.config import settings
 
 settings.s3_endpoint_url = None
 
+from app.config import settings as _settings
+_settings.run_migrations_on_startup = False
+
 
 # --- RBAC 测试助手 ---
 import pytest
