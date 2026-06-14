@@ -45,3 +45,16 @@ export const listDeployments = () => api.get<Deployment[]>("/deployments").then(
 export const createDeployment = (model_version_id: number) =>
   api.post<Deployment>("/deployments", { model_version_id }).then(r => r.data);
 export const stopDeployment = (id: number) => api.post<Deployment>(`/deployments/${id}/stop`, {}).then(r => r.data);
+
+export type AdminUser = { id: number; name: string; email: string; role_id: number | null; is_active: boolean };
+export type Role = { id: number; name: string; description: string; data_scope: string; is_system: boolean; permissions: string[] };
+export type Permission = { code: string; description: string };
+export const listUsers = () => api.get<AdminUser[]>("/users").then(r => r.data);
+export const createUser = (b: { name: string; email: string; password: string; role_id: number | null }) => api.post<AdminUser>("/users", b).then(r => r.data);
+export const updateUser = (id: number, b: { role_id?: number | null; is_active?: boolean }) => api.patch<AdminUser>(`/users/${id}`, b).then(r => r.data);
+export const resetPassword = (id: number, password: string) => api.post(`/users/${id}/reset-password`, { password }).then(r => r.data);
+export const listRoles = () => api.get<Role[]>("/roles").then(r => r.data);
+export const createRole = (b: { name: string; description: string; data_scope: string; permission_codes: string[] }) => api.post<Role>("/roles", b).then(r => r.data);
+export const updateRole = (id: number, b: { permission_codes?: string[]; data_scope?: string; description?: string }) => api.patch<Role>(`/roles/${id}`, b).then(r => r.data);
+export const deleteRole = (id: number) => api.delete(`/roles/${id}`).then(r => r.data);
+export const listPermissions = () => api.get<Permission[]>("/permissions").then(r => r.data);
