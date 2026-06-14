@@ -3,6 +3,7 @@ import { ArrowLeft, Upload, FileSpreadsheet, Layers } from "lucide-react";
 import { listVersions, uploadVersion, type DatasetVersion } from "../api/client";
 import { Button, Card, EmptyState, Mono, PageHeader, TableShell } from "../ui";
 import { useAuth } from "../context/AuthContext";
+import { navigate } from "../router";
 
 export function DatasetDetailPage({ id }: { id: number }) {
   const { can } = useAuth();
@@ -21,7 +22,8 @@ export function DatasetDetailPage({ id }: { id: number }) {
 
   return (
     <>
-      <a href="/" className="mb-4 inline-flex items-center gap-1.5 text-[13px] text-slate-500 hover:text-slate-700">
+      <a href="/" onClick={(e) => { e.preventDefault(); navigate("/"); }}
+         className="mb-4 inline-flex items-center gap-1.5 text-[13px] text-slate-500 hover:text-slate-700 cursor-pointer">
         <ArrowLeft size={15} /> 返回数据集
       </a>
       <PageHeader title={`数据集 #${id} · 版本`} subtitle="每次上传都会创建一个不可变快照(parquet + checksum)。" />

@@ -10,10 +10,11 @@ import { RolesPage } from "./pages/RolesPage";
 import { useAuth } from "./context/AuthContext";
 import { AppShell } from "./components/AppShell";
 import { Spinner } from "./ui";
+import { usePath } from "./router";
 
 export default function App() {
   const { me, loading } = useAuth();
-  const path = window.location.pathname;
+  const path = usePath();
 
   if (path === "/login") return <LoginPage />;
   if (loading) {

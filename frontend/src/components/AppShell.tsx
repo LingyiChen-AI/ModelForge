@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { cx } from "../ui";
+import { navigate } from "../router";
 
 type NavItem = { href: string; label: string; icon: ReactNode; perm?: string; match: (p: string) => boolean };
 
@@ -46,7 +47,7 @@ export function AppShell({ path, children }: { path: string; children: ReactNode
             <a
               key={n.href}
               href={n.href}
-              onClick={() => setOpen(false)}
+              onClick={(e) => { e.preventDefault(); setOpen(false); navigate(n.href); }}
               className={cx(
                 "group relative flex items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] font-medium transition-colors",
                 active

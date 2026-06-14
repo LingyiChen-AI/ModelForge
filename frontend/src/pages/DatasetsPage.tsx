@@ -3,6 +3,7 @@ import { Database, Plus, ChevronRight } from "lucide-react";
 import { listDatasets, createDataset, type Dataset } from "../api/client";
 import { Button, Card, EmptyState, Field, Input, Select, Badge, PageHeader, TableShell } from "../ui";
 import { useAuth } from "../context/AuthContext";
+import { navigate } from "../router";
 
 const TASK_TONE: Record<string, "blue" | "violet" | "cyan" | "amber"> = {
   classification: "blue", ner: "violet", pair: "cyan", embedding: "amber",
@@ -45,7 +46,7 @@ export function DatasetsPage() {
         {items.length === 0 ? (
           <EmptyState icon={<Database size={22} />} title="还没有数据集" hint="新建一个数据集,然后上传 CSV / JSONL 生成第一个版本。" />
         ) : items.map(d => (
-          <tr key={d.id} className="cursor-pointer" onClick={() => (location.href = `/datasets/${d.id}`)}>
+          <tr key={d.id} className="cursor-pointer" onClick={() => navigate(`/datasets/${d.id}`)}>
             <td>
               <div className="flex items-center gap-2.5">
                 <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-slate-100 text-slate-400"><Database size={15} /></span>

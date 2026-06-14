@@ -3,6 +3,7 @@ import { Hexagon, LogIn } from "lucide-react";
 import { login } from "../auth";
 import { useAuth } from "../context/AuthContext";
 import { Button, Field, Input } from "../ui";
+import { navigate } from "../router";
 
 export function LoginPage() {
   const { setMe } = useAuth();
@@ -13,7 +14,7 @@ export function LoginPage() {
 
   const submit = async () => {
     setErr(""); setBusy(true);
-    try { const me = await login(email, pw); setMe(me); location.href = "/"; }
+    try { const me = await login(email, pw); setMe(me); navigate("/"); }
     catch { setErr("邮箱或密码不正确"); }
     finally { setBusy(false); }
   };
