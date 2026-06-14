@@ -11,6 +11,7 @@
 - **评估流程**:对某模型版本 + 评估集版本发起评估,worker 加载已注册模型批量推理算指标,结果回写 `EvalRun`,可在同一评估集上横向对比多个模型版本(分类已落地)。
 - **模型版本管理**:复用 MLflow Model Registry,业务侧 `ModelVersion` 表镜像关键字段供查询与评估关联。
 - **在线部署**:一键把模型版本部署到 model-server,从 Registry 拉权重加载,按 task_type 暴露 `/predict`(分类/NER)、`/embed`(向量)、`/similarity`(句对);app-server 提供部署管理(创建/列表/停止)。
+- **认证与 RBAC**:JWT 登录 + 自定义角色(固定权限目录上自由组合)+ 角色级数据范围(`all`/`own`,`own` 仅见/改自己 `created_by` 的资源);超管管理用户(角色/启停/改密)与角色(权限集/数据范围);内部回调用 `X-Internal-Token` 护栏。
 
 支持的任务类型:
 
@@ -85,8 +86,12 @@ pip install -e 'services/model-server[dev]'
 ### 3. 初始化数据库
 
 ```bash
-cd services/app-server && alembic upgrade head && cd -
+cd services/app-server && alembic upgrade head
+python -m app.bootstrap   # 写入权限目录/系统角色/初始超管(幂等)
+cd -
 ```
+
+> 迁移建表,`bootstrap` 写种子数据。初始超管来自 `SEED_ADMIN_EMAIL`/`SEED_ADMIN_PASSWORD`(默认 `admin@modelforge.local` / `admin12345`,生产务必改)。**所有业务端点都需登录**(`POST /auth/login` 拿 JWT,前端首屏即登录页)。`JWT_SECRET`、`INTERNAL_TOKEN`、MinIO 凭证等生产环境务必用 env 覆盖默认值。
 
 ### 4. 启动服务
 
@@ -119,8 +124,14 @@ cd services/model-server && pytest -q
 
 ## 主要 API
 
+> 除 `POST /auth/login` 外,所有端点需带 `Authorization: Bearer <token>`;按角色权限码鉴权,按角色数据范围过滤。
+
 | 方法 | 路径 | 说明 |
 |---|---|---|
+| `POST` | `/auth/login` | 登录,返回 JWT + 用户权限 |
+| `GET` | `/auth/me` | 当前用户信息与权限码 |
+| `GET/POST/PATCH` | `/users`、`/users/{id}` | 用户管理(需 `user:manage`) |
+| `GET/POST/PATCH/DELETE` | `/roles`、`/permissions` | 角色与权限目录(需 `role:manage`) |
 | `POST` | `/datasets` | 创建数据集 |
 | `GET` | `/datasets` | 数据集列表 |
 | `POST` | `/datasets/{id}/versions` | 上传 CSV/JSONL 生成新版本 |
