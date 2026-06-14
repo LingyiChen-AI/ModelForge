@@ -23,3 +23,6 @@ app.include_router(deployment.router)
 
 from app.api import auth
 app.include_router(auth.router)
+
+from app.api import users
+app.include_router(users.router)
