@@ -23,7 +23,8 @@ def report_result(training_job_id: int, run_id: str, model_name: str,
         f"{settings.app_server_url}/training-jobs/internal/{training_job_id}/result",
         json={"run_id": run_id, "model_name": model_name, "version": version,
               "metrics": {k: float(v) for k, v in metrics.items()
-                          if isinstance(v, (int, float))}}, timeout=10)
+                          if isinstance(v, (int, float))}},
+        headers={"X-Internal-Token": settings.internal_token}, timeout=10)
 
 
 @celery_app.task(name=TRAIN_TASK, bind=True)

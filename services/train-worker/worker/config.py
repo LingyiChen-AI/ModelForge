@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     s3_bucket_datasets: str = "datasets"
     mlflow_tracking_uri: str = "http://localhost:5000"
     app_server_url: str = "http://localhost:8000"
+    internal_token: str = "modelforge-internal"
 
 
 settings = Settings()
