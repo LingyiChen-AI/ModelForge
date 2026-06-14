@@ -64,6 +64,16 @@ export function TrainingPage() {
   }, []);
   useEffect(() => { reload().finally(() => setLoading(false)); const t = setInterval(reload, 3000); return () => clearInterval(t); }, []);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const v = params.get("badcase_version");
+    if (v) {
+      setOpen(true);
+      setDvIds([v]);  // preselect the badcase train-set version (user still picks model + eval set)
+      window.history.replaceState({}, "", "/training");
+    }
+  }, []);
+
   const openDrawer = () => { setModelId(""); setBaseModel(""); setDvIds([]); setEvalDvIds([]); setBusy(false); setOpen(true); };
   const changeModel = (id: string) => {
     setModelId(id);
