@@ -21,13 +21,13 @@ function originOf(endpoint: string | null): string {
 function make(base: string, path: string, body: unknown, respExample: unknown,
              respDesc: string, reqFields: ApiField[], taskType: string): ApiDoc {
   const url = `${base}${path}`;
-  const curl = `curl -X POST ${url} \\\n  -H 'Content-Type: application/json' \\\n  -d '${JSON.stringify(body)}'`;
+  const curl = `curl -X POST ${url} \\\n  -H 'Content-Type: application/json' \\\n  -H 'X-Api-Key: <你的 inference key>' \\\n  -d '${JSON.stringify(body)}'`;
   return {
     taskLabel: TASK_LABEL[taskType] ?? taskType,
     method: "POST", url, reqFields, curl,
     // Unified envelope: { code, data, message }. code=0 表示成功。
     respExample: JSON.stringify({ code: 0, data: respExample, message: "success" }, null, 2),
-    respDesc,
+    respDesc: `调用需在请求头带 \`X-Api-Key\`（在「API Key」页创建一个含 inference 范围的 Key）。${respDesc}`,
   };
 }
 
