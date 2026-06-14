@@ -16,5 +16,6 @@ class Settings(BaseSettings):
     internal_token: str = "modelforge-internal"
     seed_admin_email: str = "admin@modelforge.local"
     seed_admin_password: str = "admin12345"
+    run_migrations_on_startup: bool = True
 
 settings = Settings()
