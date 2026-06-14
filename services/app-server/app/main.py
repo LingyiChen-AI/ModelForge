@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from contextlib import asynccontextmanager
 from app.config import settings
@@ -14,6 +15,17 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="ModelForge app-server", lifespan=lifespan)
+
+# CORS: frontend (Vite dev) is a different origin; it authenticates via the
+# Authorization Bearer header (no cookies), so allow all origins without credentials.
+_cors_origins = [o.strip() for o in settings.cors_allow_origins.split(",") if o.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins,
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/health")
 def health():

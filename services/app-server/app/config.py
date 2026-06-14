@@ -17,5 +17,6 @@ class Settings(BaseSettings):
     seed_admin_email: str = "admin@modelforge.local"
     seed_admin_password: str = "admin12345"
     run_migrations_on_startup: bool = True
+    cors_allow_origins: str = "*"   # comma-separated origins; "*" = all (dev)
 
 settings = Settings()
