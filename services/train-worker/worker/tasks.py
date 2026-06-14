@@ -1,4 +1,4 @@
-import json, tempfile
+import json, re, tempfile
 import mlflow
 from mlflow.tracking import MlflowClient
 import requests
@@ -15,6 +15,14 @@ from worker.model_loader import download_model
 from worker.evaluators import get_evaluator
 
 
+def _mlflow_metrics(metrics: dict) -> dict:
+    """MLflow metric names may not contain '@' (and a few other chars). Sanitize keys
+    for MLflow logging only — the DB/UI keep the original names (e.g. 'recall@1')."""
+    def safe(k: str) -> str:
+        return re.sub(r"[^A-Za-z0-9_\-./: ]", "_", k.replace("@", "_at_"))
+    return {safe(k): float(v) for k, v in (metrics or {}).items() if isinstance(v, (int, float))}
+
+
 def run_recipe(task_type, df, base_model, hyperparams, output_dir, on_progress=None, eval_df=None):
     return get_recipe(task_type).train(df=df, base_model=base_model,
                                        hyperparams=hyperparams, output_dir=output_dir,
@@ -29,7 +37,7 @@ def _progress_reporter(engine, job_id):
         except Exception:
             pass
         try:
-            nums = {k: float(v) for k, v in (metrics or {}).items() if isinstance(v, (int, float))}
+            nums = _mlflow_metrics(metrics)
             if nums:
                 mlflow.log_metrics(nums, step=int(step))
         except Exception:
@@ -92,8 +100,7 @@ def train_task(self, training_job_id: int):
                 result = run_recipe(job["task_type"], df, job["base_model"], hp, out,
                                     on_progress=_progress_reporter(engine, training_job_id),
                                     eval_df=eval_df)
-                mlflow.log_metrics({k: float(v) for k, v in result.metrics.items()
-                                    if isinstance(v, (int, float))})
+                mlflow.log_metrics(_mlflow_metrics(result.metrics))
                 mlflow.log_artifacts(result.artifact_dir, artifact_path="model")
                 version = _register_run_model(run_id, model_name)
         set_job_progress(engine, training_job_id, 1.0)
