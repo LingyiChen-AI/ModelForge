@@ -31,8 +31,8 @@ def test_real_migrations_build_schema_and_seed(pg_engine):
             "JOIN roles r ON r.id=rp.role_id JOIN permissions p ON p.id=rp.permission_id "
             "WHERE r.name='superadmin' AND p.code='*'")).scalar()
         h = c.execute(text("SELECT password_hash FROM users WHERE email='admin@modelforge.local'")).scalar()
-    assert ntab == 12 and nperm == 13 and nrole == 4 and sa_perms == 1
+    assert ntab == 12 and nperm == 14 and nrole == 4 and sa_perms == 1
     assert bcrypt.checkpw(b"admin12345", h.encode())
     assert run_migrations(pg_engine, MIGRATIONS_DIR) == []
     with pg_engine.connect() as c:
-        assert c.execute(text("SELECT count(*) FROM permissions")).scalar() == 13
+        assert c.execute(text("SELECT count(*) FROM permissions")).scalar() == 14
