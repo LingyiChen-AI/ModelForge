@@ -142,3 +142,31 @@ export type ApiKey = { id: number; name: string; key_prefix: string; scopes: str
 export const listApiKeys = () => api.get<ApiKey[]>("/api-keys").then(r => r.data);
 export const createApiKey = (b: { name: string; scopes: string[] }) => api.post<ApiKey & { plaintext: string }>("/api-keys", b).then(r => r.data);
 export const revokeApiKey = (id: number) => api.delete(`/api-keys/${id}`).then(r => r.data);
+
+export type Badcase = {
+  id: number;
+  model_version_id: number;
+  model_name: string | null;
+  model_version_label: string | null;
+  task_type: string;
+  input: Record<string, any>;
+  inference: Record<string, any>;
+  category: string | null;
+  source: string | null;
+  source_ref: string | null;
+  status: string;
+  annotation: Record<string, any> | null;
+  dataset_version_id: number | null;
+  created_at: string;
+};
+export const listBadcases = (p?: { model_version_id?: number; status?: string; category?: string }) =>
+  api.get<Badcase[]>("/badcases", { params: p ?? {} }).then(r => r.data);
+export const getBadcase = (id: number) => api.get<Badcase>(`/badcases/${id}`).then(r => r.data);
+export const annotateBadcase = (id: number, annotation: Record<string, any>) =>
+  api.patch<Badcase>(`/badcases/${id}/annotate`, { annotation }).then(r => r.data);
+export const buildBadcaseDataset = (badcase_ids: number[], name?: string) =>
+  api.post<{ dataset_id: number; dataset_name: string; version_id: number; version_no: number; row_count: number }>(
+    "/badcases/build-dataset",
+    { badcase_ids, name },
+  ).then(r => r.data);
+export const listBadcaseRules = () => api.get<{ rules: any[] }>("/badcase/rules").then(r => r.data.rules);
