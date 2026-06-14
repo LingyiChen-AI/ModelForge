@@ -10,7 +10,6 @@ import { UsersPage } from "./pages/UsersPage";
 import { RolesPage } from "./pages/RolesPage";
 import { ApiKeysPage } from "./pages/ApiKeysPage";
 import { BadcasePage } from "./pages/BadcasePage";
-import { BadcaseRulesPage } from "./pages/BadcaseRulesPage";
 import { useAuth } from "./context/AuthContext";
 import { AppShell } from "./components/AppShell";
 import { Spinner } from "./ui";
@@ -41,7 +40,6 @@ export default function App() {
   else if (path === "/users") page = <UsersPage />;
   else if (path === "/roles") page = <RolesPage />;
   else if (path === "/api-keys") page = <ApiKeysPage />;
-  else if (path === "/badcase-rules") page = <BadcaseRulesPage />;
   else if (path.startsWith("/badcase")) page = <BadcasePage />;
 
   return <AppShell path={path}>{page}</AppShell>;

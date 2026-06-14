@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Bug, Database } from "lucide-react";
-import { listBadcases, buildBadcaseDataset, type Badcase } from "../api/client";
-import { Button, EmptyState, PageHeader, Select, StatusBadge, TableShell } from "../ui";
+import { Bug, Database, BookText } from "lucide-react";
+import { listBadcases, buildBadcaseDataset, listBadcaseRules, type Badcase } from "../api/client";
+import { Badge, Button, Drawer, EmptyState, PageHeader, Select, StatusBadge, TableShell } from "../ui";
 import { toastError, toastSuccess } from "../toast";
 import { navigate } from "../router";
 import { BadcaseAnnotateDrawer } from "./BadcaseAnnotateDrawer";
@@ -12,6 +12,7 @@ const STATUS_OPTIONS = [
   { v: "annotated", l: "已标注" },
   { v: "used", l: "已用" },
 ];
+const TASK_LABEL: Record<string, string> = { classification: "分类", ner: "序列标注", pair: "句对", embedding: "向量检索" };
 
 export function BadcasePage() {
   const [items, setItems] = useState<Badcase[]>([]);
@@ -20,6 +21,13 @@ export function BadcasePage() {
   const [sel, setSel] = useState<number[]>([]);
   const [anno, setAnno] = useState<Badcase | null>(null);
   const [busy, setBusy] = useState(false);
+  const [rulesOpen, setRulesOpen] = useState(false);
+  const [rules, setRules] = useState<any[]>([]);
+
+  const openRules = () => {
+    setRulesOpen(true);
+    if (rules.length === 0) listBadcaseRules().then(setRules).catch(() => toastError("加载规则失败"));
+  };
 
   const reload = () =>
     listBadcases(status ? { status } : undefined).then(setItems);
@@ -74,7 +82,8 @@ export function BadcasePage() {
       />
 
       <div className="mb-4 flex items-center gap-2.5">
-        <span className="text-[13px] text-slate-500">状态</span>
+        <Button onClick={openRules}><BookText size={15} /> 查看上报规则</Button>
+        <span className="ml-2 text-[13px] text-slate-500">状态</span>
         <Select
           className="h-9 w-40"
           value={status}
@@ -164,6 +173,36 @@ export function BadcasePage() {
           reload();
         }}
       />
+
+      <Drawer
+        open={rulesOpen}
+        onClose={() => setRulesOpen(false)}
+        title="上报规则"
+        subtitle="每种模型类型的 Badcase 上报契约;外部业务用带 badcase:report 的 API Key 调用 POST /badcase/report。"
+        width="max-w-2xl"
+      >
+        <div className="flex flex-col gap-4">
+          {rules.map(r => (
+            <div key={r.task_type} className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="mb-3 flex items-center gap-2">
+                <Badge tone="blue">{TASK_LABEL[r.task_type] ?? r.task_type}</Badge>
+                <span className="font-mono text-[12px] text-slate-500">{r.task_type}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-4 text-[12.5px]">
+                <div><div className="label mb-1">input 字段</div><div className="font-mono text-slate-600">{(r.input_keys ?? []).join(", ")}</div></div>
+                <div><div className="label mb-1">annotation 字段(系统内标注)</div><div className="font-mono text-slate-600">{(r.annotation_keys ?? []).join(", ")}</div></div>
+              </div>
+              <div className="mt-3">
+                <div className="label mb-1">上报示例</div>
+                <pre className="overflow-x-auto rounded-lg bg-slate-900 p-3 font-mono text-[11px] text-slate-100">{`curl -X POST '$API/badcase/report' \\
+  -H 'Content-Type: application/json' \\
+  -H 'X-Api-Key: <badcase:report key>' \\
+  -d '${JSON.stringify({ model_version_id: 1, input: r.example?.input, inference: r.example?.inference })}'`}</pre>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Drawer>
     </>
   );
 }
