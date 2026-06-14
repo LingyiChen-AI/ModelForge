@@ -31,10 +31,11 @@ export function Select({ className, children, ...rest }: SelectHTMLAttributes<HT
 
 export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
-    <label className="flex flex-col gap-1.5">
+    <label className="relative flex flex-col gap-1.5">
       <span className="label">{label}</span>
       {children}
-      {hint && <span className="text-xs text-slate-400">{hint}</span>}
+      {/* hint floats below the input (out of flow) so fields keep equal height and align in a row */}
+      {hint && <span className="pointer-events-none absolute top-full left-0 mt-1 whitespace-nowrap text-xs text-slate-400">{hint}</span>}
     </label>
   );
 }

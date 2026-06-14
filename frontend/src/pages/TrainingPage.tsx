@@ -23,7 +23,7 @@ export function TrainingPage() {
       <PageHeader title="训练任务" subtitle="提交训练后由 GPU worker 执行,完成自动注册到模型版本。列表每 3 秒刷新。" />
 
       {can("training:run") && (
-        <Card className="mb-5 p-4">
+        <Card className="mb-5 px-4 pt-4 pb-8">
           <div className="flex flex-wrap items-end gap-3">
             <Field label="数据集版本 ID"><Input className="w-44" placeholder="如 1" value={dvId} onChange={e => setDvId(e.target.value)} /></Field>
             <div className="grow min-w-[220px]"><Field label="base_model" hint="HuggingFace 模型名,bert-tiny 最快"><Input value={baseModel} onChange={e => setBaseModel(e.target.value)} /></Field></div>

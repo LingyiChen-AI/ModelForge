@@ -31,7 +31,7 @@ export function EvalPage() {
       <PageHeader title="评估" subtitle="在评估集上对模型版本批量推理算指标;按评估集版本过滤即得 Leaderboard。" />
 
       {can("eval:run") && (
-        <Card className="mb-5 p-4">
+        <Card className="mb-5 px-4 pt-4 pb-8">
           <div className="flex flex-wrap items-end gap-3">
             <Field label="模型版本 ID"><Input className="w-40" placeholder="如 1" value={mvId} onChange={e => setMvId(e.target.value)} /></Field>
             <Field label="评估集版本 ID" hint="留空显示全部"><Input className="w-40" placeholder="如 2" value={dvId} onChange={e => setDvId(e.target.value)} /></Field>
