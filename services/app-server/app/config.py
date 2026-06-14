@@ -10,5 +10,11 @@ class Settings(BaseSettings):
     s3_bucket_datasets: str = "datasets"
     mlflow_tracking_uri: str = "http://localhost:5000"
     model_server_url: str = "http://localhost:8001"
+    jwt_secret: str = "dev-secret-change-me"
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 720
+    internal_token: str = "modelforge-internal"
+    seed_admin_email: str = "admin@modelforge.local"
+    seed_admin_password: str = "admin12345"
 
 settings = Settings()
