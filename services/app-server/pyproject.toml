@@ -7,6 +7,7 @@ dependencies = [
   "sqlalchemy>=2.0", "psycopg[binary]>=3.1", "alembic>=1.13",
   "pydantic-settings>=2.2", "celery>=5.3", "redis>=5.0",
   "boto3>=1.34", "mlflow>=2.16", "pandas>=2.2", "pyarrow>=16.0",
+  "pyjwt>=2.8", "bcrypt>=4.0",
   "modelforge-common",
 ]
 [project.optional-dependencies]
