@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { Hexagon, LogIn } from "lucide-react";
+import { LogIn } from "lucide-react";
 import { login } from "../auth";
 import { useAuth } from "../context/AuthContext";
 import { Button, Field, Input } from "../ui";
 import { navigate } from "../router";
+import { Logo } from "../components/Logo";
 
 export function LoginPage() {
   const { setMe } = useAuth();
@@ -24,9 +25,7 @@ export function LoginPage() {
                     [background-image:radial-gradient(60rem_40rem_at_70%_-10%,rgba(34,197,94,.14),transparent),radial-gradient(50rem_30rem_at_-10%_110%,rgba(56,189,248,.10),transparent)]">
       <div className="w-full max-w-sm">
         <div className="mb-7 flex flex-col items-center text-center">
-          <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-brand-500/15 ring-1 ring-brand-500/30">
-            <Hexagon size={26} className="text-brand-400" fill="currentColor" fillOpacity={0.15} />
-          </div>
+          <Logo size={56} className="mb-4 shadow-lg shadow-black/30 rounded-2xl" />
           <h1 className="text-xl font-semibold text-white">ModelForge</h1>
           <p className="mt-1 text-[13px] text-slate-400">NLP 模型训练与服务平台</p>
         </div>

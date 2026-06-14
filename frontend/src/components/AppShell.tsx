@@ -1,11 +1,12 @@
 import { useState, type ReactNode } from "react";
 import {
   Database, Cpu, Boxes, BarChart3, Rocket, Users, ShieldCheck,
-  LogOut, Menu, X, Hexagon,
+  LogOut, Menu, X,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { cx } from "../ui";
 import { navigate } from "../router";
+import { Logo } from "./Logo";
 
 type NavItem = { href: string; label: string; icon: ReactNode; perm?: string; match: (p: string) => boolean };
 
@@ -31,9 +32,7 @@ export function AppShell({ path, children }: { path: string; children: ReactNode
   const sidebar = (
     <div className="flex h-full flex-col bg-ink-900 text-slate-300">
       <div className="flex items-center gap-2.5 px-5 h-16 border-b border-white/5">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500/15 ring-1 ring-brand-500/30">
-          <Hexagon size={18} className="text-brand-400" fill="currentColor" fillOpacity={0.15} />
-        </div>
+        <Logo size={34} />
         <div className="leading-tight">
           <div className="text-[15px] font-semibold text-white tracking-tight">ModelForge</div>
           <div className="text-[10.5px] uppercase tracking-widest text-slate-500">ML Platform</div>
