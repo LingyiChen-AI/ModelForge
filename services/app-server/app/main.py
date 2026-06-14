@@ -20,3 +20,6 @@ app.include_router(eval_api.router)
 
 from app.api import deployment
 app.include_router(deployment.router)
+
+from app.api import auth
+app.include_router(auth.router)
