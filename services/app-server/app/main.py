@@ -63,3 +63,6 @@ app.include_router(roles.router)
 
 from app.api import stats
 app.include_router(stats.router)
+
+from app.api import api_keys
+app.include_router(api_keys.router)
