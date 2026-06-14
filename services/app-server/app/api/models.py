@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from app.db import get_db
 from app.authz import require, apply_scope
 from app.models.user import User
-from app.models.training import Model, ModelVersion
+from app.models.training import Model, ModelVersion, TrainingJob
 
 TaskLiteral = Literal["classification", "ner", "pair", "embedding"]
 
@@ -68,12 +68,49 @@ def _model_out(m: Model, db: Session) -> ModelOut:
         latest_stage=latest.stage if latest else None,
         created_at=m.created_at, created_by_name=m.created_by_name)
 
+class ModelTrainingOut(BaseModel):
+    """One training run under a model, for the model-detail history timeline."""
+    id: int
+    name: str
+    status: str
+    created_at: datetime
+    created_by_name: str | None = None
+    train_count: int          # number of train-set versions merged
+    eval_count: int           # number of eval-set versions merged
+    train_datasets: list[str] = []
+    eval_datasets: list[str] = []
+    version_label: str | None = None   # mlflow version produced by this run, if any
+    metrics: dict = {}                 # the produced version's train metrics
+
 models_router = APIRouter(prefix="/models", tags=["models"])
 
 @models_router.get("", response_model=list[ModelOut])
 def list_models(user: User = Depends(require("model:read")), db: Session = Depends(get_db)):
     models = db.execute(apply_scope(select(Model).order_by(Model.id.desc()), Model, user)).scalars().all()
     return [_model_out(m, db) for m in models]
+
+@models_router.get("/{model_id}/trainings", response_model=list[ModelTrainingOut])
+def model_trainings(model_id: int, user: User = Depends(require("model:read")),
+                    db: Session = Depends(get_db)):
+    m = db.execute(apply_scope(select(Model).where(Model.id == model_id), Model, user)).scalar_one_or_none()
+    if not m:
+        raise HTTPException(404, "model not found")
+    jobs = db.execute(select(TrainingJob).where(TrainingJob.model_id == model_id)
+                      .order_by(TrainingJob.id.desc())).scalars().all()
+    # map each job to the model version it produced (for the result metrics + label)
+    by_job = {v.source_training_job_id: v for v in db.execute(
+        select(ModelVersion).where(ModelVersion.model_id == model_id)).scalars()}
+    out = []
+    for j in jobs:
+        v = by_job.get(j.id)
+        out.append(ModelTrainingOut(
+            id=j.id, name=j.name, status=j.status, created_at=j.created_at,
+            created_by_name=j.created_by_name,
+            train_count=len(j.train_version_ids), eval_count=len(j.eval_version_ids),
+            train_datasets=j.train_datasets, eval_datasets=j.eval_datasets,
+            version_label=v.mlflow_version if v else None,
+            metrics=v.train_metrics if v else {}))
+    return out
 
 @models_router.post("", response_model=ModelOut, status_code=201)
 def create_model(body: ModelCreate, user: User = Depends(require("model:write")),

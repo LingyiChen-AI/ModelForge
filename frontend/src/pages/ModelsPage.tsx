@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
-import { Boxes, Plus, Trash2 } from "lucide-react";
-import { listModels, createModel, deleteModel, setModelStage, type Model } from "../api/client";
-import { Badge, Button, ConfirmDialog, Drawer, EmptyState, Field, Input, Select, PageHeader, TableShell, Creator, CreatedAt } from "../ui";
+import { Boxes, Plus, Trash2, History } from "lucide-react";
+import { listModels, createModel, deleteModel, setModelStage, listModelTrainings, type Model, type ModelTraining } from "../api/client";
+import { Badge, Button, ConfirmDialog, Drawer, EmptyState, Field, Input, Select, PageHeader, TableShell, Creator, CreatedAt, StatusBadge, fmtTime } from "../ui";
 import { toastError } from "../toast";
 import { useAuth } from "../context/AuthContext";
 
@@ -36,9 +36,17 @@ export function ModelsPage() {
   const [busy, setBusy] = useState(false);
   const [del, setDel] = useState<Model | null>(null);
   const [delBusy, setDelBusy] = useState(false);
+  const [detail, setDetail] = useState<Model | null>(null);     // model whose history is shown
+  const [trainings, setTrainings] = useState<ModelTraining[]>([]);
+  const [trLoading, setTrLoading] = useState(false);
   const [f, setF] = useState({ name: "", task_type: "classification", description: "" });
   const reload = () => listModels().then(setItems);
   useEffect(() => { reload().finally(() => setLoading(false)); }, []);
+
+  const openDetail = (m: Model) => {
+    setDetail(m); setTrainings([]); setTrLoading(true);
+    listModelTrainings(m.id).then(setTrainings).catch(() => toastError("加载训练记录失败")).finally(() => setTrLoading(false));
+  };
 
   const openDrawer = () => { setF({ name: "", task_type: "classification", description: "" }); setBusy(false); setOpen(true); };
   const create = () => {
@@ -67,7 +75,7 @@ export function ModelsPage() {
       <TableShell
         loading={loading}
         empty={items.length === 0}
-        head={<><th>模型</th><th>任务</th><th>最新版本</th><th>训练指标</th><th className="w-28">阶段</th><th className="w-16">版本数</th><th>创建者</th><th className="w-36">创建时间</th><th className="w-12 text-right"></th></>}
+        head={<><th>模型</th><th>任务</th><th>最新版本</th><th>训练指标</th><th className="w-28">阶段</th><th className="w-16">版本数</th><th>创建者</th><th className="w-36">创建时间</th><th className="w-32 text-right"></th></>}
       >
         {items.length === 0 ? (
           <EmptyState icon={<Boxes size={22} />} title="还没有模型" hint="先「新建模型」(命名 + 任务类型),再到「训练」里选它训练出版本。" />
@@ -96,7 +104,10 @@ export function ModelsPage() {
             <td><Creator name={m.created_by_name} /></td>
             <td><CreatedAt at={m.created_at} /></td>
             <td className="text-right">
-              {can("model:write") && <Button size="sm" variant="danger" onClick={() => setDel(m)}><Trash2 size={13} /></Button>}
+              <div className="flex items-center justify-end gap-2">
+                <Button size="sm" onClick={() => openDetail(m)}><History size={13} /> 详情</Button>
+                {can("model:write") && <Button size="sm" variant="danger" onClick={() => setDel(m)}><Trash2 size={13} /></Button>}
+              </div>
             </td>
           </tr>
         ))}
@@ -111,6 +122,49 @@ export function ModelsPage() {
         onCancel={() => setDel(null)}
         onConfirm={doDelete}
       />
+
+      <Drawer
+        open={detail !== null}
+        onClose={() => setDetail(null)}
+        title={detail ? `${detail.name} · 训练记录` : "训练记录"}
+        subtitle="按时间倒序展示该模型的历次训练:训练集/评测集数量、训练人、训练时间与结果指标。"
+        width="max-w-2xl"
+      >
+        {trLoading ? (
+          <div className="py-10 text-center text-[13px] text-slate-400">加载中…</div>
+        ) : trainings.length === 0 ? (
+          <div className="py-10 text-center text-[13px] text-slate-400">该模型还没有训练记录</div>
+        ) : (
+          <div className="relative flex flex-col gap-5 pl-5">
+            <span className="absolute left-[7px] top-1 bottom-1 w-px bg-slate-200" />
+            {trainings.map(t => (
+              <div key={t.id} className="relative">
+                <span className="absolute -left-5 top-2 h-3.5 w-3.5 rounded-full border-2 border-white bg-brand-500 shadow" />
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-[13px] font-medium text-slate-800">{t.name}</span>
+                    <StatusBadge status={t.status} />
+                    {t.version_label && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11.5px] text-slate-600">V{t.version_label}</span>}
+                    <span className="ml-auto text-[12px] text-slate-400">{fmtTime(t.created_at)}</span>
+                  </div>
+                  <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-slate-500">
+                    <span>训练人:{t.created_by_name ?? "—"}</span>
+                    <span>训练集:{t.train_count} 个</span>
+                    <span>评测集:{t.eval_count} 个</span>
+                  </div>
+                  {(t.train_datasets.length > 0 || t.eval_datasets.length > 0) && (
+                    <div className="mb-2 flex flex-col gap-1">
+                      {t.train_datasets.length > 0 && <div className="flex flex-wrap items-center gap-1 text-[11.5px] text-slate-500"><span className="text-slate-400">训练集</span>{t.train_datasets.map(d => <span key={d} className="rounded bg-slate-100 px-1.5 py-0.5">{d}</span>)}</div>}
+                      {t.eval_datasets.length > 0 && <div className="flex flex-wrap items-center gap-1 text-[11.5px] text-slate-500"><span className="text-slate-400">评测集</span>{t.eval_datasets.map(d => <span key={d} className="rounded bg-slate-100 px-1.5 py-0.5">{d}</span>)}</div>}
+                    </div>
+                  )}
+                  <div><div className="label mb-1 text-[11px]">结果指标</div><Metrics data={t.metrics} /></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Drawer>
 
       <Drawer
         open={open}

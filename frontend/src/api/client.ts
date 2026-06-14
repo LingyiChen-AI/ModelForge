@@ -101,6 +101,8 @@ export type Model = {
 export const listModels = () => api.get<Model[]>("/models").then(r => r.data);
 export const createModel = (b: { name: string; task_type: string; description?: string }) =>
   api.post<Model>("/models", b).then(r => r.data);
+export type ModelTraining = { id: number; name: string; status: string; created_at: string; created_by_name: string | null; train_count: number; eval_count: number; train_datasets: string[]; eval_datasets: string[]; version_label: string | null; metrics: Record<string, number> };
+export const listModelTrainings = (modelId: number) => api.get<ModelTraining[]>(`/models/${modelId}/trainings`).then(r => r.data);
 export type ModelVersion = { id: number; name: string; mlflow_version: string; task_type: string; train_metrics: Record<string, number>; stage: string; created_at: string; created_by_name: string | null };
 export const listJobs = () => api.get<TrainingJob[]>("/training-jobs").then(r => r.data);
 export const createJob = (b: any) => api.post<TrainingJob>("/training-jobs", b).then(r => r.data);
