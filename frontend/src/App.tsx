@@ -8,6 +8,7 @@ import { DeployPage } from "./pages/DeployPage";
 import { LoginPage } from "./pages/LoginPage";
 import { UsersPage } from "./pages/UsersPage";
 import { RolesPage } from "./pages/RolesPage";
+import { ApiKeysPage } from "./pages/ApiKeysPage";
 import { useAuth } from "./context/AuthContext";
 import { AppShell } from "./components/AppShell";
 import { Spinner } from "./ui";
@@ -37,6 +38,7 @@ export default function App() {
   else if (path === "/deploy") page = <DeployPage />;
   else if (path === "/users") page = <UsersPage />;
   else if (path === "/roles") page = <RolesPage />;
+  else if (path === "/api-keys") page = <ApiKeysPage />;
 
   return <AppShell path={path}>{page}</AppShell>;
 }

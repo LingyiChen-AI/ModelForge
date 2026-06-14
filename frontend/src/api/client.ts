@@ -137,3 +137,8 @@ export const createRole = (b: { name: string; description: string; data_scope: s
 export const updateRole = (id: number, b: { name?: string; permission_codes?: string[]; data_scope?: string; description?: string }) => api.patch<Role>(`/roles/${id}`, b).then(r => r.data);
 export const deleteRole = (id: number) => api.delete(`/roles/${id}`).then(r => r.data);
 export const listPermissions = () => api.get<Permission[]>("/permissions").then(r => r.data);
+
+export type ApiKey = { id: number; name: string; key_prefix: string; scopes: string[]; created_by_name: string | null; last_used_at: string | null; revoked_at: string | null; created_at: string };
+export const listApiKeys = () => api.get<ApiKey[]>("/api-keys").then(r => r.data);
+export const createApiKey = (b: { name: string; scopes: string[] }) => api.post<ApiKey & { plaintext: string }>("/api-keys", b).then(r => r.data);
+export const revokeApiKey = (id: number) => api.delete(`/api-keys/${id}`).then(r => r.data);

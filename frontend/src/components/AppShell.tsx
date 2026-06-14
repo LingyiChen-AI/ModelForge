@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from "react";
 import {
   LayoutDashboard, Database, Cpu, Boxes, BarChart3, Rocket, Users, ShieldCheck,
-  LogOut, PanelLeftClose, PanelLeftOpen,
+  KeyRound, LogOut, PanelLeftClose, PanelLeftOpen,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { cx } from "../ui";
@@ -19,6 +19,7 @@ const NAV: NavItem[] = [
   { href: "/deploy", label: "部署", icon: <Rocket size={18} />, perm: "deploy:read", match: p => p.startsWith("/deploy") },
   { href: "/users", label: "用户", icon: <Users size={18} />, perm: "user:manage", match: p => p.startsWith("/users") },
   { href: "/roles", label: "角色", icon: <ShieldCheck size={18} />, perm: "role:manage", match: p => p.startsWith("/roles") },
+  { href: "/api-keys", label: "API Key", icon: <KeyRound size={18} />, perm: "apikey:manage", match: p => p.startsWith("/api-keys") },
 ];
 
 function initials(name: string) {
