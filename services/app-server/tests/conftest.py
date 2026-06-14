@@ -31,9 +31,14 @@ def make_user(db, *, codes=("*",), data_scope="all", email="u@x.com",
               name="u", active=True):
     from app.models.rbac import Role, Permission
     from app.models.user import User
-    perms = [Permission(code=c, description=c) for c in codes]
-    for p in perms:
-        db.add(p)
+    from sqlalchemy import select
+    perms = []
+    for c in codes:
+        p = db.execute(select(Permission).where(Permission.code == c)).scalar_one_or_none()
+        if p is None:
+            p = Permission(code=c, description=c)
+            db.add(p)
+        perms.append(p)
     role = Role(name=f"role-{email}", data_scope=data_scope, permissions=perms)
     db.add(role); db.commit()
     u = User(name=name, email=email, role_id=role.id, is_active=active)
