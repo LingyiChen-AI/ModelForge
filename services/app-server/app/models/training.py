@@ -20,6 +20,7 @@ class TrainingJob(Base, TimestampMixin):
     celery_task_id: Mapped[str | None] = mapped_column(nullable=True)
     mlflow_run_id: Mapped[str | None] = mapped_column(nullable=True)
     error: Mapped[str | None] = mapped_column(nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
 
 class ModelVersion(Base, TimestampMixin):
@@ -37,6 +38,7 @@ class ModelVersion(Base, TimestampMixin):
     train_metrics: Mapped[dict] = mapped_column(JSON, default=dict)
     stage: Mapped[str] = mapped_column(default="none")
     artifact_uri: Mapped[str | None] = mapped_column(nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
 
 class EvalRun(Base, TimestampMixin):
@@ -55,6 +57,7 @@ class EvalRun(Base, TimestampMixin):
     results: Mapped[dict] = mapped_column(JSON, default=dict)
     per_sample_uri: Mapped[str | None] = mapped_column(nullable=True)
     error: Mapped[str | None] = mapped_column(nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
 
 class Deployment(Base, TimestampMixin):
@@ -70,3 +73,4 @@ class Deployment(Base, TimestampMixin):
     replicas: Mapped[int] = mapped_column(default=1)
     config: Mapped[dict] = mapped_column(JSON, default=dict)
     error: Mapped[str | None] = mapped_column(nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
