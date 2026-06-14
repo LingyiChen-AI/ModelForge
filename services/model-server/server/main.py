@@ -1,9 +1,10 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
 from server.store import store
+from server.api_auth import require_api_key
 
 app = FastAPI(title="ModelForge model-server")
 
@@ -56,7 +57,7 @@ class PredictReq(BaseModel):
     texts: list[str]
 
 
-@app.post("/predict")
+@app.post("/predict", dependencies=[Depends(require_api_key("inference"))])
 def predict(req: PredictReq):
     entry = store.get(req.model_version_id)
     if not entry:
@@ -74,7 +75,7 @@ class EmbedReq(BaseModel):
     texts: list[str]
 
 
-@app.post("/embed")
+@app.post("/embed", dependencies=[Depends(require_api_key("inference"))])
 def embed(req: EmbedReq):
     entry = store.get(req.model_version_id)
     if not entry:
@@ -90,7 +91,7 @@ class SimReq(BaseModel):
     pairs: list[tuple[str, str]]
 
 
-@app.post("/similarity")
+@app.post("/similarity", dependencies=[Depends(require_api_key("inference"))])
 def similarity(req: SimReq):
     entry = store.get(req.model_version_id)
     if not entry:
