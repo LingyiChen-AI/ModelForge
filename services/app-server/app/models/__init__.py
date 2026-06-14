@@ -3,6 +3,7 @@ from app.models.rbac import Role, Permission, RolePermission
 from app.models.user import User
 from app.models.dataset import Dataset, DatasetVersion
 from app.models.training import TrainingJob, ModelVersion, EvalRun, Deployment
+from app.models.api_key import ApiKey
 
 __all__ = [
     "Base",
@@ -16,4 +17,5 @@ __all__ = [
     "ModelVersion",
     "EvalRun",
     "Deployment",
+    "ApiKey",
 ]
