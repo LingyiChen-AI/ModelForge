@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Bug, BookText, PencilLine } from "lucide-react";
 import { listBadcaseSummary, listBadcaseRules, type BadcaseSummary } from "../api/client";
-import { Badge, Button, Drawer, EmptyState, PageHeader, TableShell } from "../ui";
+import { Badge, Button, EmptyState, PageHeader, TableShell } from "../ui";
 import { toastError } from "../toast";
 import { navigate } from "../router";
+import { BadcaseRulesDrawer } from "./BadcaseRulesDrawer";
 
 const TASK_LABEL: Record<string, string> = {
   classification: "分类", ner: "序列标注", pair: "句对", embedding: "向量检索",
@@ -77,18 +78,7 @@ export function BadcasePage() {
         )}
       </TableShell>
 
-      <Drawer open={rulesOpen} onClose={() => setRulesOpen(false)} title="上报规则" subtitle="各任务类型的上报字段契约与示例。">
-        <div className="flex flex-col gap-4">
-          {rules.map((r: any) => (
-            <div key={r.task_type} className="rounded-lg border border-slate-200 p-3">
-              <div className="mb-1.5 font-medium text-slate-800">{TASK_LABEL[r.task_type] ?? r.task_type}</div>
-              <div className="text-[12px] text-slate-500">input 字段:<span className="font-mono">{(r.input_keys ?? []).join(", ")}</span></div>
-              <div className="text-[12px] text-slate-500">标注字段:<span className="font-mono">{(r.annotation_keys ?? []).join(", ")}</span></div>
-              <pre className="mt-2 rounded bg-slate-50 p-2 font-mono text-[11.5px] text-slate-600 whitespace-pre-wrap break-all">{JSON.stringify(r.example, null, 2)}</pre>
-            </div>
-          ))}
-        </div>
-      </Drawer>
+      <BadcaseRulesDrawer open={rulesOpen} onClose={() => setRulesOpen(false)} rules={rules} />
     </div>
   );
 }
