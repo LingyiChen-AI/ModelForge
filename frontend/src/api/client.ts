@@ -175,6 +175,8 @@ export const buildBadcaseDataset = (badcase_ids: number[], name?: string) =>
 export const listBadcaseRules = () => api.get<{ rules: any[] }>("/badcase/rules").then(r => r.data.rules);
 export const listBadcaseLabels = (model_version_id: number) =>
   api.get<{ labels: string[] }>("/badcases/labels", { params: { model_version_id } }).then(r => r.data.labels);
+export type BadcaseStats = { total: number; processed: number; pending: number; fixed: number; fix_rate: number };
+export const getBadcaseStats = () => api.get<BadcaseStats>("/badcases/stats").then(r => r.data);
 export type BadcaseSummary = {
   model_version_id: number;
   model_name: string | null;

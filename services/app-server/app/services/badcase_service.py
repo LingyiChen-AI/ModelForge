@@ -9,6 +9,18 @@ from app.services.dataset_service import create_version
 from app.storage import build_storage
 
 
+def stats(db: Session) -> dict:
+    """Overview aggregate across all badcases: total, processed (annotated+used),
+    pending, fixed (fixed_by non-empty) and the overall fix rate."""
+    rows = summary(db)
+    total = sum(r["reported"] for r in rows)
+    processed = sum(r["annotated"] for r in rows)
+    pending = sum(r["pending"] for r in rows)
+    fixed = sum(r["fixed"] for r in rows)
+    return {"total": total, "processed": processed, "pending": pending,
+            "fixed": fixed, "fix_rate": (fixed / total) if total else 0.0}
+
+
 def label_options(db: Session, model_version_id: int) -> list[str]:
     """Candidate annotation labels for a model version = the discrete label space it was
     trained on. classification -> distinct train `label`s; ner -> distinct `tags`;

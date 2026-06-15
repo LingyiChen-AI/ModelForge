@@ -47,6 +47,12 @@ def badcase_summary(_: User = Depends(require("badcase:read")), db: Session = De
     return badcase_service.summary(db)
 
 
+@router.get("/badcases/stats")
+def badcase_stats(_: User = Depends(require("badcase:read")), db: Session = Depends(get_db)):
+    """Overview aggregate (total / processed / pending / fixed / fix_rate)."""
+    return badcase_service.stats(db)
+
+
 @router.get("/badcases/labels")
 def badcase_labels(model_version_id: int, _: User = Depends(require("badcase:read")),
                    db: Session = Depends(get_db)):

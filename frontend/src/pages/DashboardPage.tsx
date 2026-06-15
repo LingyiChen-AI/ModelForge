@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Database, Boxes, Layers, Cpu, BarChart3, Rocket, RefreshCw, type LucideIcon } from "lucide-react";
-import { getStats, getCharts, type Stats, type Charts } from "../api/client";
+import { Database, Boxes, Layers, Cpu, BarChart3, Rocket, RefreshCw, Bug, type LucideIcon } from "lucide-react";
+import { getStats, getCharts, getBadcaseStats, type Stats, type Charts, type BadcaseStats } from "../api/client";
 import { Button, PageHeader } from "../ui";
 import { Donut, BarList, type Seg } from "../components/charts";
 import { navigate } from "../router";
@@ -59,14 +59,41 @@ function ChartCard({ title, children }: { title: string; children: React.ReactNo
   );
 }
 
+function BadcaseCard({ bc }: { bc: BadcaseStats }) {
+  const items = [
+    { label: "Badcase 总数", value: String(bc.total), tone: "text-slate-900" },
+    { label: "已处理", value: String(bc.processed), tone: "text-slate-900" },
+    { label: "待处理", value: String(bc.pending), tone: bc.pending > 0 ? "text-amber-600" : "text-slate-900" },
+    { label: "修复率", value: (bc.fix_rate * 100).toFixed(1) + "%", tone: "text-emerald-600" },
+  ];
+  return (
+    <button
+      onClick={() => navigate("/badcase")}
+      className="card mt-4 flex w-full items-center gap-5 p-5 text-left transition hover:shadow-md hover:ring-1 hover:ring-brand-200 cursor-pointer"
+    >
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-rose-50 text-rose-600"><Bug size={20} /></div>
+      <div className="grid flex-1 grid-cols-2 gap-4 sm:grid-cols-4">
+        {items.map(it => (
+          <div key={it.label}>
+            <div className={`tnum text-[26px] font-semibold leading-none ${it.tone}`}>{it.value}</div>
+            <div className="mt-1.5 text-[12.5px] text-slate-500">{it.label}</div>
+          </div>
+        ))}
+      </div>
+    </button>
+  );
+}
+
 export function DashboardPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [charts, setCharts] = useState<Charts>({});
+  const [badcase, setBadcase] = useState<BadcaseStats | null>(null);
   const [error, setError] = useState(false);
   const load = () => {
-    setError(false); setStats(null);
+    setError(false); setStats(null); setBadcase(null);
     getStats().then(setStats).catch(() => setError(true));
     getCharts().then(setCharts).catch(() => {});
+    getBadcaseStats().then(setBadcase).catch(() => setBadcase(null));  // hidden if no badcase:read
   };
   useEffect(load, []);
   const cards = CARDS.filter(c => stats && c.key in stats);
@@ -106,6 +133,8 @@ export function DashboardPage() {
               );
             })}
           </div>
+
+          {badcase && <BadcaseCard bc={badcase} />}
 
           <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
             {charts.jobs_by_status && <ChartCard title="训练任务状态"><Donut data={toSegs(charts.jobs_by_status, STATUS_CONF)} /></ChartCard>}
