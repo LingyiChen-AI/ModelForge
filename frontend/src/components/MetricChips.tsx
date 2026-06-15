@@ -5,7 +5,7 @@ function fmtMetric(k: string, v: number | string): string {
   return Number.isInteger(v) ? String(v) : v.toFixed(3);
 }
 
-export function MetricChips({ data, max = 5 }: { data: Record<string, number>; max?: number }) {
+export function MetricChips({ data, max = 12 }: { data: Record<string, number>; max?: number }) {
   const entries = Object.entries(data || {})
     // surface badcase 修复率 first so it's never dropped by the cap
     .sort(([a], [b]) => (b === "badcase_fix_rate" ? 1 : 0) - (a === "badcase_fix_rate" ? 1 : 0));

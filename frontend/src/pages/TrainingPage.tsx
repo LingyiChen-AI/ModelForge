@@ -179,7 +179,7 @@ export function TrainingPage() {
                 <span className="tnum text-[12px] text-slate-400">100%</span>
               ) : <span className="text-slate-300">—</span>}
             </td>
-            <td className="wrap"><MetricChips data={j.metrics} max={4} /></td>
+            <td className="wrap"><MetricChips data={j.metrics} /></td>
             <td><Creator name={j.created_by_name} /></td>
             <td><CreatedAt at={j.created_at} /></td>
             <td className="text-right">
