@@ -43,3 +43,77 @@ def test_prompt_eval_schema(session_factory):
     out = PromptEvalDetailOut.model_validate(run).model_dump()
     assert out["eval_type"] == "multi_prompt" and out["arms"][0]["label"] == "A"
     assert out["prompt_version_ids"] == [1, 2]
+
+
+def _seed_prompt_and_dataset(db):
+    """建一个有 2 个版本的 prompt(参数 name)、一个 llm 模型、一个 prompt 测试集版本(列含 name)。"""
+    from app.models.prompt import Prompt, PromptVersion
+    from app.models.llm import LlmProvider, LlmModel
+    from app.models.dataset import Dataset, DatasetVersion
+    p = Prompt(name="问候")
+    p.versions.append(PromptVersion(version_no=1, system_prompt="", user_prompt="你好 {{ name }}", params=["name"]))
+    p.versions.append(PromptVersion(version_no=2, system_prompt="", user_prompt="hi {{ name }}", params=["name"]))
+    db.add(p)
+    prov = LlmProvider(name="prov", base_url="u", api_key="k")
+    prov.models.append(LlmModel(model_id="gpt-x"))
+    db.add(prov)
+    ds = Dataset(name="集", kind="prompt", task_type="prompt")
+    db.add(ds); db.commit()
+    dv = DatasetVersion(dataset_id=ds.id, version_no=1, storage_uri="s3://x/y",
+                        row_count=2, checksum="c", note="", stats={"columns": ["name"]})
+    db.add(dv); db.commit(); db.refresh(p); db.refresh(prov); db.refresh(dv)
+    return p, prov.models[0], dv
+
+
+def test_service_validation_and_arms(session_factory, monkeypatch):
+    import app.services.prompt_eval_service as svc
+    monkeypatch.setattr(svc, "send_prompt_eval_task", lambda rid: "celery-1")
+    db = session_factory()
+    p, model, dv = _seed_prompt_and_dataset(db)
+    v1, v2 = p.versions[0].id, p.versions[1].id
+
+    class Body:
+        eval_type = "multi_prompt"; name = "r"
+        prompt_version_ids = [v1, v2]; model_ids = [model.id]; dataset_version_ids = [dv.id]
+    run = svc.create_and_dispatch(db, Body(), created_by=None)
+    assert run.eval_type == "multi_prompt" and len(run.arms) == 2 and run.celery_task_id == "celery-1"
+
+    # single_prompt 记录上一版本
+    class Body2:
+        eval_type = "single_prompt"; name = "r2"
+        prompt_version_ids = [v2]; model_ids = [model.id]; dataset_version_ids = [dv.id]
+    run2 = svc.create_and_dispatch(db, Body2(), created_by=None)
+    assert len(run2.arms) == 1 and run2.compare_to_version_id == v1
+
+    # 数量约束:multi_prompt 只给 1 个 prompt -> ValueError
+    import pytest
+    class BadCount:
+        eval_type = "multi_prompt"; name = "r"
+        prompt_version_ids = [v1]; model_ids = [model.id]; dataset_version_ids = [dv.id]
+    with pytest.raises(ValueError):
+        svc.create_and_dispatch(db, BadCount(), created_by=None)
+
+
+def test_service_missing_param(session_factory, monkeypatch):
+    import app.services.prompt_eval_service as svc
+    monkeypatch.setattr(svc, "send_prompt_eval_task", lambda rid: "c")
+    from app.models.prompt import Prompt, PromptVersion
+    from app.models.llm import LlmProvider, LlmModel
+    from app.models.dataset import Dataset, DatasetVersion
+    db = session_factory()
+    p = Prompt(name="x"); p.versions.append(PromptVersion(version_no=1, system_prompt="",
+              user_prompt="{{ city }}", params=["city"]))
+    db.add(p)
+    prov = LlmProvider(name="pr", base_url="u", api_key="k"); prov.models.append(LlmModel(model_id="m")); db.add(prov)
+    ds = Dataset(name="d", kind="prompt", task_type="prompt"); db.add(ds); db.commit()
+    dv = DatasetVersion(dataset_id=ds.id, version_no=1, storage_uri="s", row_count=1,
+                        checksum="c", note="", stats={"columns": ["name"]})  # 缺 city
+    db.add(dv); db.commit(); db.refresh(p); db.refresh(prov); db.refresh(dv)
+
+    class Body:
+        eval_type = "single_prompt"; name = "r"
+        prompt_version_ids = [p.versions[0].id]; model_ids = [prov.models[0].id]; dataset_version_ids = [dv.id]
+    import pytest
+    with pytest.raises(ValueError) as ei:
+        svc.create_and_dispatch(db, Body(), created_by=None)
+    assert "city" in str(ei.value)

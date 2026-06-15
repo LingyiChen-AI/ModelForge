@@ -13,3 +13,9 @@ from modelforge_common.task_names import EVAL_TASK
 def send_eval_task(eval_run_id: int) -> str:
     result = _celery.send_task(EVAL_TASK, args=[eval_run_id])
     return result.id
+
+from modelforge_common.task_names import PROMPT_EVAL_TASK
+
+def send_prompt_eval_task(run_id: int) -> str:
+    result = _celery.send_task(PROMPT_EVAL_TASK, args=[run_id])
+    return result.id
