@@ -73,3 +73,6 @@ app.include_router(badcase.router)
 
 from app.api import llm
 app.include_router(llm.router)
+
+from app.api import prompt
+app.include_router(prompt.router)

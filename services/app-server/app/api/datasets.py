@@ -9,6 +9,7 @@ from app.storage import build_storage
 from app.models.user import User
 from app.models.dataset import Dataset, DatasetVersion
 from app.schemas.dataset import DatasetCreate, DatasetOut, DatasetVersionOut, DatasetTreeOut
+from app.schemas.prompt import PromptDatasetCreate
 from app.services.dataset_service import create_version, serialize_template, serialize_df
 from app.pagination import paginate
 
@@ -26,6 +27,14 @@ def create_dataset(body: DatasetCreate, user: User = Depends(require("dataset:wr
                    db: Session = Depends(get_db)):
     ds = Dataset(name=body.name, kind=body.kind.value, task_type=body.task_type.value,
                  created_by=user.id)
+    db.add(ds); db.commit(); db.refresh(ds)
+    return ds
+
+@router.post("/prompt", response_model=DatasetOut, status_code=201)
+def create_prompt_dataset(body: PromptDatasetCreate,
+                          user: User = Depends(require("dataset:write")),
+                          db: Session = Depends(get_db)):
+    ds = Dataset(name=body.name, kind="prompt", task_type="prompt", created_by=user.id)
     db.add(ds); db.commit(); db.refresh(ds)
     return ds
 
