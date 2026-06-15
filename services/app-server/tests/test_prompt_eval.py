@@ -30,3 +30,16 @@ def test_bootstrap_has_prompteval_perms(session_factory):
     assert "prompteval:run" in {p.code for p in member.permissions}
     assert "prompteval:read" in {p.code for p in viewer.permissions}
     assert "prompteval:run" not in {p.code for p in viewer.permissions}
+
+
+def test_prompt_eval_schema(session_factory):
+    from app.models.prompt_eval import PromptEvalRun, PromptEvalArm
+    from app.schemas.prompt_eval import PromptEvalDetailOut
+    db = session_factory()
+    run = PromptEvalRun(name="r", eval_type="multi_prompt",
+                        prompt_version_ids=[1, 2], model_ids=[3], dataset_version_ids=[4])
+    run.arms.append(PromptEvalArm(arm_index=0, prompt_version_id=1, model_id=3, label="A"))
+    db.add(run); db.commit(); db.refresh(run)
+    out = PromptEvalDetailOut.model_validate(run).model_dump()
+    assert out["eval_type"] == "multi_prompt" and out["arms"][0]["label"] == "A"
+    assert out["prompt_version_ids"] == [1, 2]
