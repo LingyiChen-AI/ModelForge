@@ -31,6 +31,8 @@ class BadcaseOut(BaseModel):
     source_ref: str | None
     status: str
     annotation: dict | None
+    annotated_by_name: str | None = None
+    annotated_at: datetime | None = None
     dataset_version_id: int | None
     created_at: datetime
     fixed_by: list[dict] = []

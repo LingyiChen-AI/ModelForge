@@ -33,8 +33,10 @@ def rules(_: User = Depends(require("badcase:read"))):
 def list_badcases(response: Response, page: int | None = Query(None, ge=1),
                   page_size: int = Query(20, ge=1, le=200),
                   model_version_id: int | None = None, status: str | None = None,
-                  category: str | None = None, _: User = Depends(require("badcase:read")),
+                  category: str | None = None, bucket: str | None = None,
+                  _: User = Depends(require("badcase:read")),
                   db: Session = Depends(get_db)):
+    from sqlalchemy import cast, String, func
     stmt = select(Badcase).order_by(Badcase.id.desc())
     if model_version_id is not None:
         stmt = stmt.where(Badcase.model_version_id == model_version_id)
@@ -42,6 +44,15 @@ def list_badcases(response: Response, page: int | None = Query(None, ge=1),
         stmt = stmt.where(Badcase.status == status)
     if category:
         stmt = stmt.where(Badcase.category == category)
+    # workbench buckets: pending(未标注) / unfixed(已标注未修复) / fixed(已修复).
+    # fixed_by is JSON; compare its text form so the check works on both PG and SQLite.
+    empty = func.coalesce(cast(Badcase.fixed_by, String), "[]").in_(("[]", "null", ""))
+    if bucket == "pending":
+        stmt = stmt.where(Badcase.status == "reported")
+    elif bucket == "unfixed":
+        stmt = stmt.where(Badcase.status != "reported", empty)
+    elif bucket == "fixed":
+        stmt = stmt.where(~empty)
     return paginate(db, stmt, response, page, page_size)
 
 

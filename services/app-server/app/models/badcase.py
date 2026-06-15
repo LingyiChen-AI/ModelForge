@@ -24,6 +24,12 @@ class Badcase(Base, TimestampMixin):
     fixed_by: Mapped[list] = mapped_column(JSON, default=list)  # [{model_version_id, version_label, at}]
     model_version: Mapped["ModelVersion | None"] = relationship(  # type: ignore  # noqa: F821
         "ModelVersion", lazy="selectin", foreign_keys=[model_version_id])
+    annotator: Mapped["User | None"] = relationship(  # type: ignore  # noqa: F821
+        "User", lazy="selectin", viewonly=True, foreign_keys=[annotated_by])
+
+    @property
+    def annotated_by_name(self) -> str | None:
+        return self.annotator.name if self.annotator else None
 
     @property
     def model_name(self) -> str | None:
