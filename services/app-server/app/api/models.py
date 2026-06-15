@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Literal
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -8,6 +8,7 @@ from app.db import get_db
 from app.authz import require, apply_scope
 from app.models.user import User
 from app.models.training import Model, ModelVersion, TrainingJob
+from app.pagination import paginate
 
 TaskLiteral = Literal["classification", "ner", "pair", "embedding"]
 
@@ -86,8 +87,11 @@ class ModelTrainingOut(BaseModel):
 models_router = APIRouter(prefix="/models", tags=["models"])
 
 @models_router.get("", response_model=list[ModelOut])
-def list_models(user: User = Depends(require("model:read")), db: Session = Depends(get_db)):
-    models = db.execute(apply_scope(select(Model).order_by(Model.id.desc()), Model, user)).scalars().all()
+def list_models(response: Response, page: int | None = Query(None, ge=1),
+                page_size: int = Query(20, ge=1, le=200),
+                user: User = Depends(require("model:read")), db: Session = Depends(get_db)):
+    stmt = apply_scope(select(Model).order_by(Model.id.desc()), Model, user)
+    models = paginate(db, stmt, response, page, page_size)
     return [_model_out(m, db) for m in models]
 
 @models_router.get("/{model_id}/trainings", response_model=list[ModelTrainingOut])

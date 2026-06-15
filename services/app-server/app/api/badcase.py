@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.db import get_db
@@ -10,6 +10,7 @@ from app.models.badcase import Badcase
 from app import badcase_contracts as bc
 from app.schemas.badcase import BadcaseReportIn, BadcaseAnnotateIn, BuildDatasetIn, BadcaseOut, BadcaseSummaryOut
 from app.services import badcase_service
+from app.pagination import paginate
 
 router = APIRouter(tags=["badcase"])
 
@@ -29,17 +30,19 @@ def rules(_: User = Depends(require("badcase:read"))):
 
 
 @router.get("/badcases", response_model=list[BadcaseOut])
-def list_badcases(model_version_id: int | None = None, status: str | None = None,
+def list_badcases(response: Response, page: int | None = Query(None, ge=1),
+                  page_size: int = Query(20, ge=1, le=200),
+                  model_version_id: int | None = None, status: str | None = None,
                   category: str | None = None, _: User = Depends(require("badcase:read")),
                   db: Session = Depends(get_db)):
-    q = select(Badcase).order_by(Badcase.id.desc())
+    stmt = select(Badcase).order_by(Badcase.id.desc())
     if model_version_id is not None:
-        q = q.where(Badcase.model_version_id == model_version_id)
+        stmt = stmt.where(Badcase.model_version_id == model_version_id)
     if status:
-        q = q.where(Badcase.status == status)
+        stmt = stmt.where(Badcase.status == status)
     if category:
-        q = q.where(Badcase.category == category)
-    return list(db.execute(q).scalars())
+        stmt = stmt.where(Badcase.category == category)
+    return paginate(db, stmt, response, page, page_size)
 
 
 @router.get("/badcases/summary", response_model=list[BadcaseSummaryOut])

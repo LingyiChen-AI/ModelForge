@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
@@ -12,6 +12,7 @@ from app.services import training_service
 from app.services.mlflow_sync import upsert_model_version_from_result
 from app.services.delete_service import delete_training_job
 from app.services.badcase_service import mark_fixed
+from app.pagination import paginate
 
 router = APIRouter(prefix="/training-jobs", tags=["training"])
 
@@ -24,9 +25,11 @@ def create(body: TrainingJobCreate, user: User = Depends(require("training:run")
         raise HTTPException(422, str(e))
 
 @router.get("", response_model=list[TrainingJobOut])
-def list_jobs(user: User = Depends(require("training:read")), db: Session = Depends(get_db)):
-    return db.execute(apply_scope(select(TrainingJob).order_by(TrainingJob.id.desc()),
-                                  TrainingJob, user)).scalars().all()
+def list_jobs(response: Response, page: int | None = Query(None, ge=1),
+              page_size: int = Query(20, ge=1, le=200),
+              user: User = Depends(require("training:read")), db: Session = Depends(get_db)):
+    stmt = apply_scope(select(TrainingJob).order_by(TrainingJob.id.desc()), TrainingJob, user)
+    return paginate(db, stmt, response, page, page_size)
 
 @router.get("/{job_id}", response_model=TrainingJobOut)
 def get_job(job_id: int, user: User = Depends(require("training:read")),

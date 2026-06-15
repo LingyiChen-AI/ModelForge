@@ -1,5 +1,5 @@
 import io, pandas as pd
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Response
+from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Response, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from modelforge_common.enums import TaskType
@@ -10,6 +10,7 @@ from app.models.user import User
 from app.models.dataset import Dataset, DatasetVersion
 from app.schemas.dataset import DatasetCreate, DatasetOut, DatasetVersionOut
 from app.services.dataset_service import create_version, serialize_template, serialize_df
+from app.pagination import paginate
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
 
@@ -29,8 +30,11 @@ def create_dataset(body: DatasetCreate, user: User = Depends(require("dataset:wr
     return ds
 
 @router.get("", response_model=list[DatasetOut])
-def list_datasets(user: User = Depends(require("dataset:read")), db: Session = Depends(get_db)):
-    return db.execute(apply_scope(select(Dataset), Dataset, user)).scalars().all()
+def list_datasets(response: Response, page: int | None = Query(None, ge=1),
+                  page_size: int = Query(20, ge=1, le=200),
+                  user: User = Depends(require("dataset:read")), db: Session = Depends(get_db)):
+    stmt = apply_scope(select(Dataset).order_by(Dataset.id.desc()), Dataset, user)
+    return paginate(db, stmt, response, page, page_size)
 
 def _read_upload(file: UploadFile) -> pd.DataFrame:
     raw = file.file.read()
@@ -80,12 +84,16 @@ def upload_version(dataset_id: int, file: UploadFile = File(...), note: str = Fo
         raise HTTPException(422, str(e))
 
 @router.get("/{dataset_id}/versions", response_model=list[DatasetVersionOut])
-def list_versions(dataset_id: int, user: User = Depends(require("dataset:read")),
+def list_versions(dataset_id: int, response: Response,
+                  page: int | None = Query(None, ge=1),
+                  page_size: int = Query(20, ge=1, le=200),
+                  user: User = Depends(require("dataset:read")),
                   db: Session = Depends(get_db)):
     _get_owned_dataset(db, dataset_id, user)
-    return db.execute(select(DatasetVersion)
-                      .where(DatasetVersion.dataset_id == dataset_id)
-                      .order_by(DatasetVersion.version_no.desc())).scalars().all()
+    stmt = (select(DatasetVersion)
+            .where(DatasetVersion.dataset_id == dataset_id)
+            .order_by(DatasetVersion.version_no.desc()))
+    return paginate(db, stmt, response, page, page_size)
 
 
 @router.get("/{dataset_id}/versions/{version_id}/download")

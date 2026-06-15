@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.db import get_db
@@ -7,6 +7,7 @@ from app.models.user import User
 from app.models.rbac import Role, Permission
 from app.schemas.rbac import RoleCreate, RoleUpdate, RoleOut, PermissionOut
 from app.services import role_service
+from app.pagination import paginate
 
 router = APIRouter(tags=["roles"])
 
@@ -21,8 +22,12 @@ def list_permissions(_: User = Depends(require("role:manage")), db: Session = De
     return db.execute(select(Permission).order_by(Permission.code)).scalars().all()
 
 @router.get("/roles", response_model=list[RoleOut])
-def list_roles(_: User = Depends(require("role:manage")), db: Session = Depends(get_db)):
-    return [_role_out(r) for r in db.execute(select(Role).order_by(Role.id)).scalars()]
+def list_roles(response: Response, page: int | None = Query(None, ge=1),
+               page_size: int = Query(20, ge=1, le=200),
+               _: User = Depends(require("role:manage")), db: Session = Depends(get_db)):
+    stmt = select(Role).order_by(Role.id)
+    roles = paginate(db, stmt, response, page, page_size)
+    return [_role_out(r) for r in roles]
 
 @router.post("/roles", response_model=RoleOut, status_code=201)
 def create(body: RoleCreate, _: User = Depends(require("role:manage")),
