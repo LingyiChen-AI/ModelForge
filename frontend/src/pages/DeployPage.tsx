@@ -73,7 +73,7 @@ export function DeployPage() {
     <>
       <PageHeader
         title="部署"
-        subtitle="把模型版本加载到 model-server,对外提供在线推理。列表每 3 秒刷新。"
+        subtitle="把模型版本加载到 model-server,对外提供在线推理。"
         actions={can("deploy:write") && <Button variant="primary" onClick={openDrawer}><Rocket size={16} /> 新建部署</Button>}
       />
 

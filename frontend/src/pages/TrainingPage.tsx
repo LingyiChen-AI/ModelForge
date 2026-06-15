@@ -138,7 +138,7 @@ export function TrainingPage() {
     <>
       <PageHeader
         title="训练任务"
-        subtitle="训练需绑定一个模型(在其下产出版本)。提交后由 worker 执行,完成自动注册。列表每 3 秒刷新。"
+        subtitle="训练需绑定一个模型(在其下产出版本)。提交后由 worker 执行,完成自动注册。"
         actions={can("training:run") && <Button variant="primary" onClick={openDrawer}><Play size={16} /> 新建训练任务</Button>}
       />
 
