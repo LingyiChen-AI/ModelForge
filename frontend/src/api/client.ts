@@ -275,6 +275,8 @@ export type PromptEvalItem = {
   inputs: Record<string, any>; outputs: PromptEvalOutputRow[];
   winner_arm_id: number | null; all_bad: boolean; is_good: boolean | null;
   annotated_by_name: string | null; evaluated_at: string | null;
+  ai_winner_arm_id: number | null; ai_all_bad: boolean; ai_is_good: boolean | null;
+  ai_model_id: number | null; ai_reasoning: string | null; ai_evaluated_at: string | null;
 };
 export type PromptEvalOptions = {
   prompt_versions: { id: number; label: string }[];
@@ -299,3 +301,7 @@ export type PromptEvalStats = {
   comparison?: { compare_run_id: number; compare_version_label: string | null; comparable: number; improved: number; regressed: number; improved_rate: number; regressed_rate: number } | null;
 };
 export const getPromptEvalStats = (id: number) => api.get<PromptEvalStats>(`/prompt-evals/${id}/stats`).then(r => r.data);
+export const getAiEvalPrompt = () => api.get<{ value: string }>("/settings/ai-eval-prompt").then(r => r.data.value);
+export const setAiEvalPrompt = (value: string) => api.put<{ value: string }>("/settings/ai-eval-prompt", { value }).then(r => r.data.value);
+export const triggerAiEval = (runId: number, modelId: number) =>
+  api.post<{ dispatched: boolean }>(`/prompt-evals/${runId}/ai-evaluate`, { model_id: modelId }).then(r => r.data);
