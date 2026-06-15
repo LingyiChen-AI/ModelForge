@@ -49,4 +49,5 @@ class TrainingJobOut(BaseModel):
     train_datasets: list[str] = []   # ["分类-训练集 V1", "分类-训练集 V2"] (merged)
     eval_datasets: list[str] = []
     metrics: dict = {}               # train metrics of the produced model version (empty until succeeded)
+    hyperparams: dict = {}           # the chosen training params (epochs/lr/batch_size/...)
     class Config: from_attributes = True

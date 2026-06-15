@@ -77,7 +77,7 @@ export async function downloadVersion(datasetId: number, versionId: number, vers
   triggerBlobDownload(res.data as Blob, `dataset-${datasetId}-v${versionNo}.${fmt}`);
 }
 
-export type TrainingJob = { id: number; name: string; model_id: number | null; model_name: string | null; status: string; progress: number; mlflow_run_id: string | null; error: string | null; created_at: string; created_by_name: string | null; train_datasets: string[]; eval_datasets: string[]; metrics: Record<string, number> };
+export type TrainingJob = { id: number; name: string; model_id: number | null; model_name: string | null; status: string; progress: number; mlflow_run_id: string | null; error: string | null; created_at: string; created_by_name: string | null; train_datasets: string[]; eval_datasets: string[]; metrics: Record<string, number>; hyperparams: Record<string, any> };
 export const getConfig = () => api.get<{ mlflow_url: string }>("/config").then(r => r.data);
 
 export type Stats = Record<string, number>;
@@ -101,7 +101,7 @@ export type Model = {
 export const listModels = () => api.get<Model[]>("/models").then(r => r.data);
 export const createModel = (b: { name: string; task_type: string; description?: string }) =>
   api.post<Model>("/models", b).then(r => r.data);
-export type ModelTraining = { id: number; name: string; status: string; created_at: string; created_by_name: string | null; train_count: number; eval_count: number; train_datasets: string[]; eval_datasets: string[]; version_label: string | null; metrics: Record<string, number> };
+export type ModelTraining = { id: number; name: string; status: string; created_at: string; created_by_name: string | null; train_count: number; eval_count: number; train_datasets: string[]; eval_datasets: string[]; version_label: string | null; metrics: Record<string, number>; hyperparams: Record<string, any> };
 export const listModelTrainings = (modelId: number) => api.get<ModelTraining[]>(`/models/${modelId}/trainings`).then(r => r.data);
 export type ModelVersion = { id: number; name: string; mlflow_version: string; task_type: string; train_metrics: Record<string, number>; stage: string; created_at: string; created_by_name: string | null };
 export const listJobs = () => api.get<TrainingJob[]>("/training-jobs").then(r => r.data);

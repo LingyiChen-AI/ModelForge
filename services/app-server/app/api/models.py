@@ -81,6 +81,7 @@ class ModelTrainingOut(BaseModel):
     eval_datasets: list[str] = []
     version_label: str | None = None   # mlflow version produced by this run, if any
     metrics: dict = {}                 # the produced version's train metrics
+    hyperparams: dict = {}             # the chosen training params (epochs/lr/batch_size/...)
 
 models_router = APIRouter(prefix="/models", tags=["models"])
 
@@ -109,7 +110,8 @@ def model_trainings(model_id: int, user: User = Depends(require("model:read")),
             train_count=len(j.train_version_ids), eval_count=len(j.eval_version_ids),
             train_datasets=j.train_datasets, eval_datasets=j.eval_datasets,
             version_label=v.mlflow_version if v else None,
-            metrics=v.train_metrics if v else {}))
+            metrics=v.train_metrics if v else {},
+            hyperparams=j.hyperparams or {}))
     return out
 
 @models_router.post("", response_model=ModelOut, status_code=201)

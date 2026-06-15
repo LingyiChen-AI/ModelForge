@@ -4,6 +4,7 @@ import { listModels, createModel, deleteModel, setModelStage, listModelTrainings
 import { Badge, Button, ConfirmDialog, Drawer, EmptyState, Field, Input, Select, PageHeader, TableShell, Creator, CreatedAt, StatusBadge, fmtTime } from "../ui";
 import { toastError } from "../toast";
 import { MetricChips } from "../components/MetricChips";
+import { ParamChips } from "../components/ParamChips";
 import { useAuth } from "../context/AuthContext";
 
 const TASK_TONE: Record<string, "blue" | "violet" | "cyan" | "amber"> = {
@@ -147,6 +148,7 @@ export function ModelsPage() {
                       {t.eval_datasets.length > 0 && <div className="flex flex-wrap items-center gap-1 text-[11.5px] text-slate-500"><span className="text-slate-400">评测集</span>{t.eval_datasets.map(d => <span key={d} className="rounded bg-slate-100 px-1.5 py-0.5">{d}</span>)}</div>}
                     </div>
                   )}
+                  <div className="mb-2"><div className="label mb-1 text-[11px]">训练参数</div><ParamChips data={t.hyperparams} /></div>
                   <div><div className="label mb-1 text-[11px]">结果指标</div><Metrics data={t.metrics} /></div>
                 </div>
               </div>
