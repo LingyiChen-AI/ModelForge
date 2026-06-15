@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, X, ChevronRight, Check } from "lucide-react";
+import { Loader2, X, ChevronRight, ChevronDown, Search, Check } from "lucide-react";
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -171,11 +171,10 @@ export type CascadeGroup = {
   items: { value: string; label: string; hint?: string }[];
 };
 export function Cascade({
-  groups, value, onChange, multiple = false, flat = false,
-  emptyHint = "暂无可选项", rightEmptyHint = "该项下暂无内容",
+  groups, value, onChange, multiple = false, emptyHint = "暂无可选项", rightEmptyHint = "该项下暂无内容",
 }: {
   groups: CascadeGroup[]; value: string | string[]; onChange: (v: any) => void;
-  multiple?: boolean; flat?: boolean; emptyHint?: string; rightEmptyHint?: string;
+  multiple?: boolean; emptyHint?: string; rightEmptyHint?: string;
 }) {
   const selected: string[] = multiple ? (Array.isArray(value) ? value : []) : (value ? [value as string] : []);
   const isSel = (v: string) => selected.includes(v);
@@ -191,45 +190,6 @@ export function Cascade({
 
   if (groups.length === 0) {
     return <div className="rounded-lg border border-slate-200 px-3 py-6 text-center text-[13px] text-slate-400">{emptyHint}</div>;
-  }
-
-  // flat: every group expanded as a checklist — all versions visible without clicking,
-  // so a new user can't miss a dataset hidden behind a collapsed group.
-  if (flat) {
-    return (
-      <div className="max-h-80 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
-        {groups.map(g => (
-          <div key={g.key}>
-            <div className="flex items-center gap-1.5 bg-slate-50/70 px-3 py-1.5 text-[12px] font-medium text-slate-500">
-              <span className="truncate">{g.label}</span>
-              {g.count != null && <span className="text-slate-400">({g.count})</span>}
-            </div>
-            {g.items.length === 0 ? (
-              <div className="px-3 py-2 text-[12px] text-slate-400">{rightEmptyHint}</div>
-            ) : g.items.map(it => {
-              const sel = isSel(it.value);
-              return (
-                <button
-                  key={it.value} type="button" onClick={() => pick(it.value)}
-                  className={cx("flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 pl-4 text-left text-[13px] transition",
-                    sel ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-50")}
-                >
-                  <span className="flex items-center gap-2 truncate">
-                    <span className={cx("flex h-4 w-4 shrink-0 items-center justify-center border",
-                      multiple ? "rounded" : "rounded-full",
-                      sel ? "border-brand-500 bg-brand-500 text-white" : "border-slate-300")}>
-                      {sel && <Check size={11} strokeWidth={3} />}
-                    </span>
-                    <span className="truncate">{it.label}</span>
-                  </span>
-                  {it.hint && <span className="shrink-0 text-[11.5px] text-slate-400">{it.hint}</span>}
-                </button>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-    );
   }
 
   const activeGroup = groups.find(g => g.key === active) ?? groups[0];
@@ -280,6 +240,164 @@ export function Cascade({
         })}
       </div>
     </div>
+  );
+}
+
+// Tri-state checkbox box (none / some / all) for group + leaf selection.
+function TriBox({ state }: { state: "none" | "some" | "all" }) {
+  return (
+    <span className={cx("flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+      state === "none" ? "border-slate-300" : "border-brand-500 bg-brand-500 text-white")}>
+      {state === "all" && <Check size={11} strokeWidth={3} />}
+      {state === "some" && <span className="h-0.5 w-2 rounded-sm bg-white" />}
+    </span>
+  );
+}
+
+// Cascade multi-select rendered as a dropdown: a compact trigger opens a searchable
+// two-column panel (left = groups with select-all checkbox, right = leaf checkboxes).
+// Scales to many groups without taking page space. Panel is portaled + anchored to the
+// trigger so it isn't clipped inside scrollable containers (e.g. a Drawer).
+export function CascadeSelect({
+  groups, value, onChange, placeholder = "请选择", emptyHint = "暂无可选项", searchPlaceholder = "搜索…",
+}: {
+  groups: CascadeGroup[]; value: string[]; onChange: (v: string[]) => void;
+  placeholder?: string; emptyHint?: string; searchPlaceholder?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [active, setActive] = useState("");
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+  const selected = new Set(value);
+  const toggle = (v: string) => onChange(selected.has(v) ? value.filter(x => x !== v) : [...value, v]);
+  const groupState = (g: CascadeGroup): "none" | "some" | "all" => {
+    const vals = g.items.map(i => i.value);
+    if (vals.length === 0) return "none";
+    const n = vals.filter(v => selected.has(v)).length;
+    return n === 0 ? "none" : n === vals.length ? "all" : "some";
+  };
+  const toggleGroup = (g: CascadeGroup) => {
+    const vals = g.items.map(i => i.value);
+    if (groupState(g) === "all") onChange(value.filter(v => !vals.includes(v)));
+    else onChange([...new Set([...value, ...vals])]);
+  };
+
+  const q = query.trim();
+  const groupMatches = (g: CascadeGroup) =>
+    !q || g.label.includes(q) || g.items.some(i => i.label.includes(q) || (i.hint ?? "").includes(q));
+  const vGroups = groups.filter(groupMatches);
+  const activeGroup = vGroups.find(g => g.key === active) ?? vGroups[0];
+  const vItems = activeGroup
+    ? activeGroup.items.filter(i => !q || activeGroup.label.includes(q) || i.label.includes(q) || (i.hint ?? "").includes(q))
+    : [];
+
+  const place = () => {
+    const r = triggerRef.current?.getBoundingClientRect();
+    if (r) setPos({ top: r.bottom + 4, left: r.left, width: r.width });
+  };
+  useEffect(() => {
+    if (!open) return;
+    place();
+    const onDown = (e: MouseEvent) => {
+      if (!panelRef.current?.contains(e.target as Node) && !triggerRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { if (open && !activeGroup && vGroups[0]) setActive(vGroups[0].key); }, [open, vGroups, activeGroup]);
+
+  return (
+    <>
+      <button
+        ref={triggerRef} type="button" onClick={() => setOpen(o => !o)}
+        className="input flex w-full cursor-pointer items-center justify-between gap-2 text-left"
+      >
+        <span className={cx("truncate", value.length ? "text-slate-700" : "text-slate-400")}>
+          {value.length ? `已选 ${value.length} 项` : placeholder}
+        </span>
+        <ChevronDown size={15} className={cx("shrink-0 text-slate-400 transition", open && "rotate-180")} />
+      </button>
+      {open && pos && createPortal(
+        <div
+          ref={panelRef}
+          style={{ position: "fixed", top: pos.top, left: pos.left, width: Math.max(pos.width, 380) }}
+          className="z-[120] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-lg"
+        >
+          <div className="border-b border-slate-100 p-2">
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                autoFocus value={query} onChange={e => setQuery(e.target.value)} placeholder={searchPlaceholder}
+                className="w-full rounded-md border border-slate-200 py-1.5 pl-8 pr-2 text-[13px] outline-none focus:border-brand-400"
+              />
+            </div>
+          </div>
+          {vGroups.length === 0 ? (
+            <div className="px-3 py-6 text-center text-[13px] text-slate-400">{emptyHint}</div>
+          ) : (
+            <div className="grid grid-cols-2">
+              <div className="max-h-72 overflow-y-auto border-r border-slate-100 bg-slate-50/40">
+                {vGroups.map(g => {
+                  const on = activeGroup?.key === g.key;
+                  return (
+                    <div
+                      key={g.key} onClick={() => setActive(g.key)}
+                      className={cx("flex cursor-pointer items-center gap-2 px-2.5 py-2 text-[13px] transition",
+                        on ? "bg-white font-medium text-slate-800" : "text-slate-600 hover:bg-white/70")}
+                    >
+                      <span onClick={e => { e.stopPropagation(); toggleGroup(g); }}><TriBox state={groupState(g)} /></span>
+                      <span className="flex-1 truncate">{g.label}</span>
+                      {g.count != null && <span className="text-slate-400">({g.count})</span>}
+                      <ChevronRight size={13} className="shrink-0 text-slate-300" />
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="max-h-72 overflow-y-auto">
+                {vItems.length === 0 ? (
+                  <div className="px-3 py-6 text-center text-[12.5px] text-slate-400">无匹配版本</div>
+                ) : vItems.map(it => {
+                  const sel = selected.has(it.value);
+                  return (
+                    <div
+                      key={it.value} onClick={() => toggle(it.value)}
+                      className={cx("flex cursor-pointer items-center justify-between gap-2 px-2.5 py-2 text-[13px] transition",
+                        sel ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-50")}
+                    >
+                      <span className="flex items-center gap-2 truncate">
+                        <TriBox state={sel ? "all" : "none"} />
+                        <span className="truncate">{it.label}</span>
+                      </span>
+                      {it.hint && <span className="shrink-0 text-[11.5px] text-slate-400">{it.hint}</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          {value.length > 0 && (
+            <div className="flex items-center justify-between border-t border-slate-100 px-3 py-1.5 text-[12px] text-slate-500">
+              <span>已选 {value.length} 项</span>
+              <button type="button" className="cursor-pointer text-slate-400 hover:text-slate-600" onClick={() => onChange([])}>清空</button>
+            </div>
+          )}
+        </div>,
+        document.body,
+      )}
+    </>
   );
 }
 

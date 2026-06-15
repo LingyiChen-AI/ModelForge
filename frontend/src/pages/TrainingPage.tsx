@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Cpu, Play, LineChart, Trash2 } from "lucide-react";
 import { listJobs, createJob, deleteJob, listDatasetTree, listModels, getConfig, type TrainingJob, type DatasetNode, type Model } from "../api/client";
-import { Button, Cascade, ConfirmDialog, Drawer, EmptyState, Field, Input, Mono, PageHeader, Select, StatusBadge, TableShell, Creator, CreatedAt } from "../ui";
+import { Button, CascadeSelect, ConfirmDialog, Drawer, EmptyState, Field, Input, Mono, PageHeader, Select, StatusBadge, TableShell, Creator, CreatedAt } from "../ui";
 import { MetricChips } from "../components/MetricChips";
 import { ParamChips } from "../components/ParamChips";
 import { toastError } from "../toast";
@@ -243,14 +243,13 @@ export function TrainingPage() {
                 ③ 训练集版本
                 {taskType && <span className="ml-2 font-normal text-slate-400">可多选,多选自动合并;仅显示 {TASK_LABEL[taskType] ?? taskType} 训练集</span>}
               </div>
-              <Cascade
-                multiple
-                flat
+              <CascadeSelect
                 groups={modelId ? groups : []}
                 value={dvIds}
                 onChange={setDvIds}
+                placeholder="选择训练集版本(可多选)"
+                searchPlaceholder="搜索数据集 / 版本…"
                 emptyHint={modelId ? "没有匹配的训练集,请先到「数据集」上传训练集" : "请先选择模型"}
-                rightEmptyHint="该数据集还没有版本"
               />
               {dvIds.length > 1 && <div className="mt-1.5 text-[12px] text-slate-400">已选 {dvIds.length} 个版本,训练时合并为一个训练集</div>}
             </div>
@@ -260,14 +259,13 @@ export function TrainingPage() {
                 ④ 评估集版本
                 {taskType && <span className="ml-2 font-normal text-slate-400">可多选,多选自动合并;训练中用于验证,仅显示 {TASK_LABEL[taskType] ?? taskType} 评估集</span>}
               </div>
-              <Cascade
-                multiple
-                flat
+              <CascadeSelect
                 groups={modelId ? evalGroups : []}
                 value={evalDvIds}
                 onChange={setEvalDvIds}
+                placeholder="选择评估集版本(可多选)"
+                searchPlaceholder="搜索数据集 / 版本…"
                 emptyHint={modelId ? "没有匹配的评估集,请先到「数据集」上传评估集" : "请先选择模型"}
-                rightEmptyHint="该数据集还没有版本"
               />
               {evalDvIds.length > 1 && <div className="mt-1.5 text-[12px] text-slate-400">已选 {evalDvIds.length} 个版本,验证时合并为一个评估集</div>}
             </div>
