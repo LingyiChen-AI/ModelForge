@@ -25,6 +25,7 @@ app.add_middleware(
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Total-Count"],   # let the browser read pagination total
 )
 
 @app.get("/health")

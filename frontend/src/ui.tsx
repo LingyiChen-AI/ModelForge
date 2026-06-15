@@ -1,7 +1,7 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Loader2, X, ChevronRight, ChevronDown, Search, Check } from "lucide-react";
+import { Loader2, X, ChevronLeft, ChevronRight, ChevronDown, Search, Check } from "lucide-react";
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 
@@ -398,6 +398,41 @@ export function CascadeSelect({
         document.body,
       )}
     </>
+  );
+}
+
+// Server-side pagination control. Renders nothing when everything fits on one page.
+export function Pagination({
+  page, pageSize, total, onPage, onPageSize,
+}: {
+  page: number; pageSize: number; total: number;
+  onPage: (p: number) => void; onPageSize?: (s: number) => void;
+}) {
+  const pages = Math.max(1, Math.ceil(total / pageSize));
+  if (total === 0) return null;
+  const from = (page - 1) * pageSize + 1;
+  const to = Math.min(page * pageSize, total);
+  const btn = "flex h-7 min-w-7 items-center justify-center rounded-md border border-slate-200 px-2 text-[12.5px] text-slate-600 enabled:hover:bg-slate-50 enabled:cursor-pointer disabled:opacity-40";
+  return (
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-[12.5px] text-slate-500">
+      <span>共 {total} 条 · {from}-{to}</span>
+      <div className="flex items-center gap-1.5">
+        {onPageSize && (
+          <select
+            value={pageSize}
+            onChange={e => onPageSize(Number(e.target.value))}
+            className="h-7 rounded-md border border-slate-200 bg-white px-1.5 text-[12.5px] text-slate-600 cursor-pointer"
+          >
+            {[10, 20, 50, 100].map(s => <option key={s} value={s}>{s} / 页</option>)}
+          </select>
+        )}
+        <button className={btn} disabled={page <= 1} onClick={() => onPage(1)} aria-label="首页">«</button>
+        <button className={btn} disabled={page <= 1} onClick={() => onPage(page - 1)} aria-label="上一页"><ChevronLeft size={14} /></button>
+        <span className="px-1 tabular-nums">{page} / {pages}</span>
+        <button className={btn} disabled={page >= pages} onClick={() => onPage(page + 1)} aria-label="下一页"><ChevronRight size={14} /></button>
+        <button className={btn} disabled={page >= pages} onClick={() => onPage(pages)} aria-label="末页">»</button>
+      </div>
+    </div>
   );
 }
 

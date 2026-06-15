@@ -15,6 +15,15 @@ api.interceptors.response.use(r => r, err => {
   return Promise.reject(err);
 });
 
+// Server-side pagination: endpoints return a plain array + total in X-Total-Count header.
+export type Page = { page?: number; page_size?: number };
+export type Paginated<T> = { items: T[]; total: number };
+export async function getPaginated<T>(url: string, params: Record<string, any> = {}): Promise<Paginated<T>> {
+  const r = await api.get<T[]>(url, { params });
+  const total = Number(r.headers["x-total-count"]);
+  return { items: r.data, total: Number.isFinite(total) ? total : r.data.length };
+}
+
 export type Dataset = { id: number; name: string; kind: string; task_type: string; created_at: string; created_by_name: string | null };
 export type DatasetVersion = { id: number; version_no: number; row_count: number; checksum: string; note: string; created_at: string; created_by_name: string | null };
 
