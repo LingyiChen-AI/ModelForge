@@ -13,17 +13,29 @@ def _build_st(base_model: str) -> SentenceTransformer:
     pool = models.Pooling(word.get_word_embedding_dimension(), pooling_mode="mean")
     return SentenceTransformer(modules=[word, pool])
 
+def _as_list(v):
+    """Coerce a parquet list-cell to a plain list. pandas hands list columns back as
+    numpy arrays, so `v or []` / `if v` would raise 'truth value of an array is ambiguous'."""
+    if v is None:
+        return []
+    try:
+        return list(v)
+    except TypeError:
+        return []
+
+
 class EmbeddingRecipe(Recipe):
     def _prepare_examples(self, df, negatives_mode="auto", model=None):
+        import numpy as np
         rows = []
-        corpus = [p for row in df["pos"] for p in row]
+        corpus = [p for row in df["pos"] for p in _as_list(row)]
         for _, r in df.reset_index(drop=True).iterrows():
             q = r["query"]
-            for pos in r["pos"]:
-                negs = list(r.get("neg") or [])
+            pos_list = _as_list(r["pos"])
+            for pos in pos_list:
+                negs = _as_list(r.get("neg"))
                 if negatives_mode == "auto" and not negs and model is not None:
-                    import numpy as np
-                    pool = [c for c in corpus if c not in r["pos"]]
+                    pool = [c for c in corpus if c not in pos_list]
                     if pool:
                         qe = model.encode([q]); ce = model.encode(pool)
                         sims = (qe @ ce.T)[0]
