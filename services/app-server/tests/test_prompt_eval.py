@@ -15,3 +15,18 @@ def test_prompt_eval_models(session_factory):
     it.outputs.append(PromptEvalOutput(arm_id=run.arms[0].id, output_text="hi", status="done"))
     db.add(it); db.commit(); db.refresh(it)
     assert it.outputs[0].output_text == "hi" and it.outputs[0].status == "done"
+
+
+def test_bootstrap_has_prompteval_perms(session_factory):
+    from app import bootstrap
+    from app.models.rbac import Permission, Role
+    from sqlalchemy import select
+    db = session_factory()
+    bootstrap.seed(db)
+    codes = {p.code for p in db.execute(select(Permission)).scalars()}
+    assert {"prompteval:read", "prompteval:run"} <= codes
+    member = db.execute(select(Role).where(Role.name == "member")).scalar_one()
+    viewer = db.execute(select(Role).where(Role.name == "viewer")).scalar_one()
+    assert "prompteval:run" in {p.code for p in member.permissions}
+    assert "prompteval:read" in {p.code for p in viewer.permissions}
+    assert "prompteval:run" not in {p.code for p in viewer.permissions}
