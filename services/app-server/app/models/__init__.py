@@ -5,6 +5,7 @@ from app.models.dataset import Dataset, DatasetVersion
 from app.models.training import TrainingJob, ModelVersion, EvalRun, Deployment
 from app.models.api_key import ApiKey
 from app.models.badcase import Badcase
+from app.models.llm import LlmProvider, LlmModel
 
 __all__ = [
     "Base",
@@ -20,4 +21,6 @@ __all__ = [
     "Deployment",
     "ApiKey",
     "Badcase",
+    "LlmProvider",
+    "LlmModel",
 ]
