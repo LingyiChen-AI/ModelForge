@@ -117,3 +117,51 @@ def test_service_missing_param(session_factory, monkeypatch):
     with pytest.raises(ValueError) as ei:
         svc.create_and_dispatch(db, Body(), created_by=None)
     assert "city" in str(ei.value)
+
+
+from fastapi.testclient import TestClient
+
+
+def _client(session_factory, codes):
+    db = session_factory()
+    u = make_user(db, codes=codes, data_scope="all", email="pe@x.com"); db.close()
+    from app.main import app
+    return TestClient(app), auth_headers(u.id)
+
+
+def test_prompt_eval_api(session_factory, monkeypatch):
+    import app.services.prompt_eval_service as svc
+    monkeypatch.setattr(svc, "send_prompt_eval_task", lambda rid: "celery-1")
+    db = session_factory()
+    p, model, dv = _seed_prompt_and_dataset(db)
+    v1, v2, mid, dvid = p.versions[0].id, p.versions[1].id, model.id, dv.id
+    u = make_user(db, codes=("prompteval:read", "prompteval:run"), data_scope="all", email="pe2@x.com")
+    H = auth_headers(u.id); db.close()
+    from app.main import app
+    c = TestClient(app)
+    # options
+    opts = c.get("/prompt-evals/options", headers=H).json()
+    assert any(o["id"] == v1 for o in opts["prompt_versions"])
+    assert any(o["id"] == mid for o in opts["models"])
+    assert any(o["version_id"] == dvid for o in opts["prompt_datasets"])
+    # create
+    r = c.post("/prompt-evals", json={"eval_type": "multi_prompt", "name": "r",
+               "prompt_version_ids": [v1, v2], "model_ids": [mid], "dataset_version_ids": [dvid]}, headers=H)
+    assert r.status_code == 201
+    rid = r.json()["id"]
+    assert len(r.json()["arms"]) == 2
+    # missing param / bad count -> 422
+    assert c.post("/prompt-evals", json={"eval_type": "multi_prompt", "name": "r",
+               "prompt_version_ids": [v1], "model_ids": [mid], "dataset_version_ids": [dvid]}, headers=H).status_code == 422
+    # list + detail
+    assert c.get("/prompt-evals", headers=H).json()[0]["id"] == rid
+    assert c.get(f"/prompt-evals/{rid}", headers=H).json()["eval_type"] == "multi_prompt"
+    assert c.get(f"/prompt-evals/{rid}/items", headers=H).status_code == 200  # 空 items
+    assert c.get("/prompt-evals/99999", headers=H).status_code == 404
+
+
+def test_prompt_eval_api_requires_perm(session_factory):
+    c, H = _client(session_factory, ("dataset:read",))
+    assert c.get("/prompt-evals", headers=H).status_code == 403
+    assert c.post("/prompt-evals", json={"eval_type": "single_prompt", "name": "r",
+               "prompt_version_ids": [1], "model_ids": [1], "dataset_version_ids": [1]}, headers=H).status_code == 403

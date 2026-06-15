@@ -76,3 +76,6 @@ app.include_router(llm.router)
 
 from app.api import prompt
 app.include_router(prompt.router)
+
+from app.api import prompt_eval
+app.include_router(prompt_eval.router)
