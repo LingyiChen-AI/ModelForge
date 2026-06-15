@@ -76,3 +76,30 @@ def test_prompt_out_serializes_latest(session_factory):
     assert out["latest_version_no"] == 1 and out["latest_params"] == ["a"]
     detail = PromptDetailOut.model_validate(p).model_dump()
     assert detail["versions"][0]["user_prompt"] == "{{ a }}"
+
+
+def test_prompt_service_create_and_version(session_factory):
+    from app.services import prompt_service as svc
+    db = session_factory()
+    p = svc.create_prompt(db, name="问候", system_prompt="你是 {{ role }}",
+                          user_prompt="你好 {{ name }}", note="", created_by=None)
+    assert p.versions[0].version_no == 1
+    assert p.versions[0].params == ["role", "name"]   # system ∪ user, 保序
+    v2 = svc.add_version(db, p.id, system_prompt="", user_prompt="{{ name }}{{ name }}",
+                         note="", created_by=None)
+    assert v2.version_no == 2 and v2.params == ["name"]
+    # 不存在的 prompt
+    assert svc.add_version(db, 99999, system_prompt="", user_prompt="", note="", created_by=None) is None
+    # 语法错误 -> ValueError
+    import pytest
+    with pytest.raises(ValueError):
+        svc.create_prompt(db, name="bad", system_prompt="{{ }}", user_prompt="",
+                          note="", created_by=None)
+
+
+def test_prompt_service_validate():
+    from app.services import prompt_service as svc
+    ok = svc.validate("{{ a }}", "{{ b }}")
+    assert ok["params"] == ["a", "b"] and ok["errors"] == []
+    bad = svc.validate("{{ a-b }}", "")
+    assert bad["errors"] != []
