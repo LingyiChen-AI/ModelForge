@@ -32,6 +32,8 @@ export const listDatasetsPaged = (p: { page: number; page_size: number }) =>
   getPaginated<Dataset>("/datasets", p);
 export const createDataset = (b: { name: string; kind: string; task_type: string }) =>
   api.post<Dataset>("/datasets", b).then(r => r.data);
+export const createPromptDataset = (b: { name: string }) =>
+  api.post<Dataset>("/datasets/prompt", b).then(r => r.data);
 export const listVersions = (id: number) =>
   api.get<DatasetVersion[]>(`/datasets/${id}/versions`).then(r => r.data);
 export const listVersionsPaged = (id: number, p: { page: number; page_size: number }) =>
@@ -240,3 +242,22 @@ export const listBadcaseSummary = () =>
   api.get<BadcaseSummary[]>("/badcases/summary").then(r => r.data);
 export const listBadcaseSummaryPaged = (p: { page: number; page_size: number }) =>
   getPaginated<BadcaseSummary>("/badcases/summary", p);
+
+export type PromptVersionRow = {
+  id: number; version_no: number; system_prompt: string; user_prompt: string;
+  params: string[]; note: string; created_by_name: string | null; created_at: string;
+};
+export type Prompt = {
+  id: number; name: string; created_by_name: string | null; created_at: string;
+  latest_version_no: number | null; latest_params: string[];
+};
+export type PromptDetail = Prompt & { versions: PromptVersionRow[] };
+export const listPromptsPaged = (p: { page: number; page_size: number }) =>
+  getPaginated<Prompt>("/prompts", p);
+export const getPrompt = (id: number) => api.get<PromptDetail>(`/prompts/${id}`).then(r => r.data);
+export const createPrompt = (b: { name: string; system_prompt: string; user_prompt: string; note?: string }) =>
+  api.post<PromptDetail>("/prompts", b).then(r => r.data);
+export const addPromptVersion = (id: number, b: { system_prompt: string; user_prompt: string; note?: string }) =>
+  api.post<PromptVersionRow>(`/prompts/${id}/versions`, b).then(r => r.data);
+export const validatePrompt = (b: { system_prompt: string; user_prompt: string }) =>
+  api.post<{ params: string[]; errors: string[] }>("/prompts/validate", b).then(r => r.data);
