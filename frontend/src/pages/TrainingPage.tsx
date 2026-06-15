@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Cpu, Play, LineChart, Trash2 } from "lucide-react";
 import { listJobs, createJob, deleteJob, listDatasetTree, listModels, getConfig, type TrainingJob, type DatasetNode, type Model } from "../api/client";
-import { Button, Cascade, ConfirmDialog, Drawer, EmptyState, Field, Mono, PageHeader, Select, StatusBadge, TableShell, Creator, CreatedAt } from "../ui";
+import { Button, Cascade, ConfirmDialog, Drawer, EmptyState, Field, Input, Mono, PageHeader, Select, StatusBadge, TableShell, Creator, CreatedAt } from "../ui";
 import { toastError } from "../toast";
 import { BASE_MODEL_GROUPS } from "../baseModels";
 import { useAuth } from "../context/AuthContext";
@@ -38,6 +38,18 @@ function DatasetCell({ train, evalSets }: { train: string[]; evalSets: string[] 
   );
 }
 
+const LR_OPTIONS = [
+  { v: "1e-5", l: "1e-5(更稳)" },
+  { v: "2e-5", l: "2e-5" },
+  { v: "3e-5", l: "3e-5" },
+  { v: "5e-5", l: "5e-5(默认)" },
+  { v: "1e-4", l: "1e-4(更快)" },
+];
+type Hp = { epochs: number; lr: string; batch_size: number; max_length: number };
+const defaultHp = (taskType: string): Hp => ({
+  epochs: taskType === "embedding" ? 1 : 3, lr: "5e-5", batch_size: 16, max_length: 128,
+});
+
 export function TrainingPage() {
   const { can } = useAuth();
   const [jobs, setJobs] = useState<TrainingJob[]>([]);
@@ -54,6 +66,7 @@ export function TrainingPage() {
   const [baseModel, setBaseModel] = useState("");
   const [dvIds, setDvIds] = useState<string[]>([]);     // train set versions (merged)
   const [evalDvIds, setEvalDvIds] = useState<string[]>([]);  // eval set versions (merged)
+  const [hp, setHp] = useState<Hp>(defaultHp(""));
   const reload = () => listJobs().then(setJobs);
   const runUrl = (runId: string) => `${mlflowUrl}/#/experiments/0/runs/${runId}`;
   useEffect(() => {
@@ -74,12 +87,13 @@ export function TrainingPage() {
     }
   }, []);
 
-  const openDrawer = () => { setModelId(""); setBaseModel(""); setDvIds([]); setEvalDvIds([]); setBusy(false); setOpen(true); };
+  const openDrawer = () => { setModelId(""); setBaseModel(""); setDvIds([]); setEvalDvIds([]); setHp(defaultHp("")); setBusy(false); setOpen(true); };
   const changeModel = (id: string) => {
     setModelId(id);
     const m = models.find(x => String(x.id) === id);
     setBaseModel(m ? defaultBaseModel(m.task_type) : "");
     setDvIds([]); setEvalDvIds([]);
+    setHp(defaultHp(m?.task_type ?? ""));  // epochs default depends on task type (embedding=1)
   };
 
   const selectedModel = models.find(m => String(m.id) === modelId);
@@ -109,7 +123,10 @@ export function TrainingPage() {
       dataset_version_ids: dvIds.map(Number),
       eval_dataset_version_ids: evalDvIds.map(Number),
       base_model: baseModel,
-      hyperparams: { epochs: 1, batch_size: 4 },
+      // embedding recipe only consumes epochs/batch_size; the others also use lr/max_length
+      hyperparams: taskType === "embedding"
+        ? { epochs: hp.epochs, batch_size: hp.batch_size }
+        : { epochs: hp.epochs, lr: Number(hp.lr), batch_size: hp.batch_size, max_length: hp.max_length },
     }).then(() => { setOpen(false); reload(); })
       .catch(() => toastError("提交失败"))
       .finally(() => setBusy(false));
@@ -247,6 +264,38 @@ export function TrainingPage() {
                 rightEmptyHint="该数据集还没有版本"
               />
               {evalDvIds.length > 1 && <div className="mt-1.5 text-[12px] text-slate-400">已选 {evalDvIds.length} 个版本,验证时合并为一个评估集</div>}
+            </div>
+
+            <div>
+              <div className="label mb-1.5">
+                ⑤ 训练参数
+                <span className="ml-2 font-normal text-slate-400">已填合理默认值,可按需调整</span>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="训练轮数 (epochs)">
+                  <Input type="number" min={1} max={50} value={hp.epochs}
+                    onChange={e => setHp(h => ({ ...h, epochs: Math.min(50, Math.max(1, Math.floor(Number(e.target.value) || 1))) }))} />
+                </Field>
+                <Field label="批大小 (batch size)">
+                  <Select value={String(hp.batch_size)} onChange={e => setHp(h => ({ ...h, batch_size: Number(e.target.value) }))}>
+                    {[4, 8, 16, 32, 64].map(b => <option key={b} value={b}>{b}</option>)}
+                  </Select>
+                </Field>
+                {taskType !== "embedding" && (
+                  <Field label="学习率 (learning rate)">
+                    <Select value={hp.lr} onChange={e => setHp(h => ({ ...h, lr: e.target.value }))}>
+                      {LR_OPTIONS.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+                    </Select>
+                  </Field>
+                )}
+                {taskType !== "embedding" && (
+                  <Field label="最大长度 (max length)">
+                    <Select value={String(hp.max_length)} onChange={e => setHp(h => ({ ...h, max_length: Number(e.target.value) }))}>
+                      {[64, 128, 256, 512].map(m => <option key={m} value={m}>{m}</option>)}
+                    </Select>
+                  </Field>
+                )}
+              </div>
             </div>
           </div>
         )}
