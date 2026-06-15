@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_PAGE_SIZE } from "../constants";
 import { Database, Plus, ChevronRight, Download } from "lucide-react";
-import { listDatasetsPaged, createDataset, downloadTemplateByType, type Dataset, type TemplateFormat } from "../api/client";
+import { listDatasetsPaged, createDataset, createPromptDataset, downloadTemplateByType, type Dataset, type TemplateFormat } from "../api/client";
 import { Button, Drawer, EmptyState, Field, Input, Select, Badge, PageHeader, Pagination, TableShell, Creator, CreatedAt } from "../ui";
 import { toastError } from "../toast";
 import { useAuth } from "../context/AuthContext";
@@ -14,7 +14,7 @@ const TEMPLATE_FORMATS: { fmt: TemplateFormat; label: string }[] = [
 const TASK_TONE: Record<string, "blue" | "violet" | "cyan" | "amber"> = {
   classification: "blue", ner: "violet", pair: "cyan", embedding: "amber",
 };
-const KIND_LABEL: Record<string, string> = { train: "训练集", eval: "评估集", test: "测试集" };
+const KIND_LABEL: Record<string, string> = { train: "训练集", eval: "评估集", test: "测试集", prompt: "Prompt 测试集" };
 
 export function DatasetsPage() {
   const { can } = useAuth();
@@ -34,7 +34,10 @@ export function DatasetsPage() {
   const openDrawer = () => { setName(""); setKind("train"); setTaskType("classification"); setBusy(false); setOpen(true); };
   const create = () => {
     setBusy(true);
-    createDataset({ name, kind, task_type: taskType }).then(() => { setOpen(false); reload(); })
+    const req = kind === "prompt"
+      ? createPromptDataset({ name })
+      : createDataset({ name, kind, task_type: taskType });
+    req.then(() => { setOpen(false); reload(); })
       .catch(() => toastError("创建失败")).finally(() => setBusy(false));
   };
 
@@ -87,11 +90,15 @@ export function DatasetsPage() {
           <Field label="名称"><Input placeholder="如 intent-train" value={name} onChange={e => setName(e.target.value)} /></Field>
           <Field label="类型"><Select value={kind} onChange={e => setKind(e.target.value)}>
             <option value="train">训练集</option><option value="eval">评估集</option><option value="test">测试集</option>
+            <option value="prompt">Prompt 测试集</option>
           </Select></Field>
-          <Field label="任务"><Select value={taskType} onChange={e => setTaskType(e.target.value)}>
-            <option value="classification">分类</option><option value="ner">序列标注</option>
-            <option value="pair">句对</option><option value="embedding">向量</option>
-          </Select></Field>
+          {kind === "prompt" && <p className="text-[12px] text-slate-400">Prompt 测试集的列即参数,上传 CSV/JSONL 后自动识别,无需选择任务。</p>}
+          {kind !== "prompt" && (
+            <Field label="任务"><Select value={taskType} onChange={e => setTaskType(e.target.value)}>
+              <option value="classification">分类</option><option value="ner">序列标注</option>
+              <option value="pair">句对</option><option value="embedding">向量</option>
+            </Select></Field>
+          )}
 
           <div className="rounded-lg bg-slate-50 px-3 py-2.5">
             <div className="mb-2 text-[12px] text-slate-500">下载该任务类型的数据模板(列格式按所选任务生成)</div>
