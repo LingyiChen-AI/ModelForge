@@ -169,6 +169,25 @@ export const listApiKeysPaged = (p: { page: number; page_size: number }) =>
 export const createApiKey = (b: { name: string; scopes: string[] }) => api.post<ApiKey & { plaintext: string }>("/api-keys", b).then(r => r.data);
 export const revokeApiKey = (id: number) => api.delete(`/api-keys/${id}`).then(r => r.data);
 
+export type LlmModelRow = { id: number; model_id: string; created_at: string };
+export type LlmProvider = {
+  id: number; name: string; base_url: string; masked_key: string; enabled: boolean;
+  created_by_name: string | null; created_at: string; models: LlmModelRow[];
+};
+export const listLlmProvidersPaged = (p: { page: number; page_size: number }) =>
+  getPaginated<LlmProvider>("/llm/providers", p);
+export const createLlmProvider = (b: { name: string; base_url: string; api_key: string; model_ids: string[] }) =>
+  api.post<LlmProvider>("/llm/providers", b).then(r => r.data);
+export const updateLlmProvider = (id: number, b: { name?: string; base_url?: string; enabled?: boolean; api_key?: string }) =>
+  api.patch<LlmProvider>(`/llm/providers/${id}`, b).then(r => r.data);
+export const deleteLlmProvider = (id: number) => api.delete(`/llm/providers/${id}`).then(r => r.data);
+export const addLlmModel = (providerId: number, model_id: string) =>
+  api.post<LlmModelRow>(`/llm/providers/${providerId}/models`, { model_id }).then(r => r.data);
+export const deleteLlmModel = (modelId: number) => api.delete(`/llm/models/${modelId}`).then(r => r.data);
+export type LlmTestResult = { ok: boolean; reply: string | null; latency_ms: number; error: string | null };
+export const testLlmModel = (modelId: number) =>
+  api.post<LlmTestResult>(`/llm/models/${modelId}/test`).then(r => r.data);
+
 export type Badcase = {
   id: number;
   model_version_id: number;
@@ -215,7 +234,7 @@ export type BadcaseSummary = {
   used: number;
   pending: number;
   fixed: number;
-  fixed_versions: string[];
+  fixed_versions: { version_label: string; count: number }[];
 };
 export const listBadcaseSummary = () =>
   api.get<BadcaseSummary[]>("/badcases/summary").then(r => r.data);
