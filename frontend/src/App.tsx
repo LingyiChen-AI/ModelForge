@@ -14,6 +14,7 @@ import { BadcasePage } from "./pages/BadcasePage";
 import { BadcaseAnnotateWorkbench } from "./pages/BadcaseAnnotateWorkbench";
 import { PromptsPage } from "./pages/PromptsPage";
 import { PromptEvalsPage } from "./pages/PromptEvalsPage";
+import { PromptEvalWorkbench } from "./pages/PromptEvalWorkbench";
 import { useAuth } from "./context/AuthContext";
 import { AppShell } from "./components/AppShell";
 import { Spinner } from "./ui";
@@ -46,6 +47,9 @@ export default function App() {
   else if (path === "/api-keys") page = <ApiKeysPage />;
   else if (path === "/settings") page = <SettingsPage />;
   else if (path === "/prompts") page = <PromptsPage />;
+  else if (/^\/prompt-evals\/\d+\/evaluate$/.test(path)) {
+    page = <PromptEvalWorkbench runId={Number(path.split("/")[2])} />;
+  }
   else if (path === "/prompt-evals") page = <PromptEvalsPage />;
   else if (/^\/badcase\/annotate\/\d+$/.test(path)) {
     page = <BadcaseAnnotateWorkbench modelVersionId={Number(path.split("/")[3])} />;
