@@ -7,6 +7,7 @@ from app.models.api_key import ApiKey
 from app.models.badcase import Badcase
 from app.models.llm import LlmProvider, LlmModel
 from app.models.prompt import Prompt, PromptVersion
+from app.models.prompt_eval import PromptEvalRun, PromptEvalArm, PromptEvalItem, PromptEvalOutput
 
 __all__ = [
     "Base",
@@ -26,4 +27,8 @@ __all__ = [
     "LlmModel",
     "Prompt",
     "PromptVersion",
+    "PromptEvalRun",
+    "PromptEvalArm",
+    "PromptEvalItem",
+    "PromptEvalOutput",
 ]
