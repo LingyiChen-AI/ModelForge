@@ -51,6 +51,12 @@ class PromptEvalItem(Base, TimestampMixin):
     is_good: Mapped[bool | None] = mapped_column(nullable=True)
     evaluated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     evaluated_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    ai_winner_arm_id: Mapped[int | None] = mapped_column(ForeignKey("prompt_eval_arms.id"), nullable=True)
+    ai_all_bad: Mapped[bool] = mapped_column(default=False)
+    ai_is_good: Mapped[bool | None] = mapped_column(nullable=True)
+    ai_model_id: Mapped[int | None] = mapped_column(ForeignKey("llm_models.id"), nullable=True)
+    ai_reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ai_evaluated_at: Mapped[datetime | None] = mapped_column(nullable=True)
     outputs: Mapped[list["PromptEvalOutput"]] = relationship(
         lazy="selectin", cascade="all, delete-orphan", back_populates="item",
         order_by="PromptEvalOutput.id")

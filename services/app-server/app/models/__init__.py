@@ -8,6 +8,7 @@ from app.models.badcase import Badcase
 from app.models.llm import LlmProvider, LlmModel
 from app.models.prompt import Prompt, PromptVersion
 from app.models.prompt_eval import PromptEvalRun, PromptEvalArm, PromptEvalItem, PromptEvalOutput
+from app.models.setting import AppSetting
 
 __all__ = [
     "Base",
@@ -31,4 +32,5 @@ __all__ = [
     "PromptEvalArm",
     "PromptEvalItem",
     "PromptEvalOutput",
+    "AppSetting",
 ]
