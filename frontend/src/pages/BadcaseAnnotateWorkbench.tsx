@@ -30,21 +30,35 @@ function annotationSummary(b: Badcase): string {
   return JSON.stringify(a);
 }
 
+// Compact, data-dense row: id · input (truncated, with annotation below) · status on the right.
 function BadcaseRow({ b }: { b: Badcase }) {
+  const summary = inputSummary(b);
   return (
-    <div className="rounded-lg border border-slate-200 p-3">
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <span className="font-mono text-[11.5px] text-slate-400">#{b.id}</span>
-        {b.fixed_by.length > 0 ? (
-          <div className="flex flex-wrap items-center gap-1">
-            {b.fixed_by.map(f => <Badge key={f.version_label} tone="green">V{f.version_label} 已修复</Badge>)}
+    <div className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50">
+      <span className="w-12 shrink-0 font-mono text-[12px] tabular-nums text-slate-400">#{b.id}</span>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[13.5px] text-slate-800" title={summary}>{summary}</div>
+        {b.annotation && (
+          <div className="mt-0.5 truncate text-[12px] text-slate-400" title={annotationSummary(b)}>
+            标注 · <span className="text-slate-500">{annotationSummary(b)}</span>
           </div>
-        ) : (
-          <Badge tone="amber">未修复</Badge>
         )}
       </div>
-      <div className="break-all font-mono text-[12.5px] text-slate-700">{inputSummary(b)}</div>
-      {b.annotation && <div className="mt-1 text-[12px] text-slate-500">标注:<span className="text-slate-700">{annotationSummary(b)}</span></div>}
+      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
+        {b.fixed_by.length > 0
+          ? b.fixed_by.map(f => <Badge key={f.version_label} tone="green" dot>V{f.version_label} 已修复</Badge>)
+          : <Badge tone="amber" dot>未修复</Badge>}
+      </div>
+    </div>
+  );
+}
+
+function BadcaseList({ items }: { items: Badcase[] }) {
+  return (
+    <div className="max-w-5xl overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <div className="divide-y divide-slate-100">
+        {items.map(b => <BadcaseRow key={b.id} b={b} />)}
+      </div>
     </div>
   );
 }
@@ -178,13 +192,13 @@ export function BadcaseAnnotateWorkbench({ modelVersionId }: { modelVersionId: n
         unfixed.length === 0 ? (
           <EmptyState icon={<Check size={20} />} title="暂无未修复 badcase" hint="标注后生成 badcase- 训练集并训练,即可修复。" />
         ) : (
-          <div className="grid max-w-4xl grid-cols-1 gap-2">{unfixed.map(b => <BadcaseRow key={b.id} b={b} />)}</div>
+          <BadcaseList items={unfixed} />
         )
       ) : (
         fixed.length === 0 ? (
           <EmptyState icon={<Check size={20} />} title="暂无已修复 badcase" hint="用已标注数据训练模型后,修复的 badcase 会标上版本。" />
         ) : (
-          <div className="grid max-w-4xl grid-cols-1 gap-2">{fixed.map(b => <BadcaseRow key={b.id} b={b} />)}</div>
+          <BadcaseList items={fixed} />
         )
       )}
     </div>
