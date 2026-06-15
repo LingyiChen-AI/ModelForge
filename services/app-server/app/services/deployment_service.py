@@ -2,7 +2,27 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.models.training import Deployment, ModelVersion
 from app.config import settings
-from app.modelserver_client import load_on_server as notify_load, unload_on_server as notify_unload
+from app.modelserver_client import (load_on_server as notify_load,
+                                     unload_on_server as notify_unload, list_loaded)
+
+
+def reconcile(db: Session) -> None:
+    """Make deployment statuses truthful against what's actually loaded on model-server.
+    A 'running' deployment whose model isn't loaded (e.g. model-server was restarted and
+    lost its in-memory models) is flipped to 'stopped' with a hint; the user can click
+    启动 to reload it. No-op when model-server is unreachable (avoids false flips)."""
+    loaded = list_loaded()
+    if loaded is None:
+        return
+    running = db.execute(select(Deployment).where(Deployment.status == "running")).scalars().all()
+    changed = False
+    for dep in running:
+        if dep.model_version_id not in loaded:
+            dep.status = "stopped"
+            dep.error = "实例未加载(model-server 可能已重启),点击「启动」可恢复"
+            changed = True
+    if changed:
+        db.commit()
 
 def create(db: Session, body, created_by=None) -> Deployment:
     mv = db.get(ModelVersion, body.model_version_id)

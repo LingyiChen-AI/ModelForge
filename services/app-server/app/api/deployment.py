@@ -21,6 +21,7 @@ def create(body: DeploymentCreate, user: User = Depends(require("deploy:write"))
 
 @router.get("", response_model=list[DeploymentOut])
 def list_deployments(user: User = Depends(require("deploy:read")), db: Session = Depends(get_db)):
+    deployment_service.reconcile(db)  # flip stale 'running' (e.g. after model-server restart) to truthful status
     return db.execute(apply_scope(select(Deployment).order_by(Deployment.id.desc()),
                                   Deployment, user)).scalars().all()
 
