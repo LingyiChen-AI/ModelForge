@@ -1,6 +1,90 @@
 import { type Badcase } from "../api/client";
 import { Button, Field, Input, Select } from "../ui";
 
+// a labeled key→value row inside a panel
+function KV({ k, children }: { k: string; children: React.ReactNode }) {
+  return (
+    <div className="flex gap-3 text-[13px]">
+      <span className="w-16 shrink-0 text-slate-400">{k}</span>
+      <span className="min-w-0 flex-1 break-words text-slate-700">{children}</span>
+    </div>
+  );
+}
+function Panel({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-col gap-1.5 rounded-lg border border-slate-200 bg-slate-50/60 p-3">{children}</div>;
+}
+const PAIR_LABEL = (l: any) => (String(l) === "1" ? "相似" : String(l) === "0" ? "不相似" : String(l ?? "—"));
+
+// parsed (non-JSON) display of the reported model input, per task type
+function InputView({ b }: { b: Badcase }) {
+  const i = b.input ?? {};
+  if (b.task_type === "classification") return <Panel><KV k="文本">{i.text}</KV></Panel>;
+  if (b.task_type === "pair") return <Panel><KV k="句子 A">{i.text_a}</KV><KV k="句子 B">{i.text_b}</KV></Panel>;
+  if (b.task_type === "ner")
+    return <Panel><KV k="文本">{(i.tokens ?? []).join("")}</KV></Panel>;
+  if (b.task_type === "embedding")
+    return (
+      <Panel>
+        <KV k="查询">{i.query}</KV>
+        <KV k="候选">
+          <div className="flex flex-col gap-1">
+            {(i.candidates ?? []).map((c: string, idx: number) => (
+              <span key={idx} className="rounded bg-white px-2 py-1 ring-1 ring-slate-200">{c}</span>
+            ))}
+          </div>
+        </KV>
+      </Panel>
+    );
+  return <Panel><pre className="whitespace-pre-wrap break-all font-mono text-[12px] text-slate-600">{JSON.stringify(i, null, 2)}</pre></Panel>;
+}
+
+// parsed display of the (wrong) model inference, per task type
+function InferenceView({ b }: { b: Badcase }) {
+  const f = b.inference ?? {};
+  const score = f.score != null ? <span className="ml-2 text-slate-400">置信度 {Number(f.score).toFixed(3)}</span> : null;
+  if (b.task_type === "classification")
+    return <Panel><KV k="预测标签"><span className="font-medium text-rose-600">{f.label ?? "—"}</span>{score}</KV></Panel>;
+  if (b.task_type === "pair")
+    return <Panel><KV k="预测"><span className="font-medium text-rose-600">{PAIR_LABEL(f.label)}</span>{score}</KV></Panel>;
+  if (b.task_type === "ner") {
+    const tokens: string[] = b.input?.tokens ?? [];
+    const tags: string[] = f.tags ?? [];
+    return (
+      <Panel>
+        <div className="flex flex-wrap gap-1">
+          {tokens.map((tok, idx) => {
+            const tag = tags[idx] ?? "O";
+            const ent = tag !== "O";
+            return (
+              <span key={idx} className={"rounded px-1 py-0.5 text-[13px] " + (ent ? "bg-rose-50 text-rose-600 ring-1 ring-rose-200" : "text-slate-600")}>
+                {tok}{ent && <sub className="ml-0.5 text-[9px] text-rose-400">{tag}</sub>}
+              </span>
+            );
+          })}
+        </div>
+      </Panel>
+    );
+  }
+  if (b.task_type === "embedding") {
+    const ranked: { text: string; score?: number }[] = f.ranked ?? [];
+    return (
+      <Panel>
+        <KV k="排序">
+          <div className="flex flex-col gap-1">
+            {ranked.length === 0 ? <span className="text-slate-400">—</span> : ranked.map((r, idx) => (
+              <span key={idx} className="flex items-center justify-between gap-2 rounded bg-white px-2 py-1 ring-1 ring-slate-200">
+                <span className="min-w-0 truncate">{idx + 1}. {r.text}</span>
+                {r.score != null && <span className="shrink-0 text-slate-400">{Number(r.score).toFixed(3)}</span>}
+              </span>
+            ))}
+          </div>
+        </KV>
+      </Panel>
+    );
+  }
+  return <Panel><pre className="whitespace-pre-wrap break-all font-mono text-[12px] text-slate-600">{JSON.stringify(f, null, 2)}</pre></Panel>;
+}
+
 export function annotationValid(t: string, val: Record<string, any>): boolean {
   return Boolean(
     (t === "classification" && val.label) ||
@@ -27,16 +111,8 @@ export function BadcaseAnnotateForm({
 
   return (
     <div className="flex flex-col gap-4">
-      <Field label="模型输入">
-        <pre className="rounded-lg bg-slate-50 p-2 font-mono text-[12px] text-slate-600 whitespace-pre-wrap break-all">
-          {JSON.stringify(badcase.input, null, 2)}
-        </pre>
-      </Field>
-      <Field label="模型推理(错误)">
-        <pre className="rounded-lg bg-slate-50 p-2 font-mono text-[12px] text-slate-500 whitespace-pre-wrap break-all">
-          {JSON.stringify(badcase.inference, null, 2)}
-        </pre>
-      </Field>
+      <Field label="模型输入"><InputView b={badcase} /></Field>
+      <Field label="模型推理(错误)"><InferenceView b={badcase} /></Field>
 
       {t === "classification" && (
         <Field label="正确标签 label">

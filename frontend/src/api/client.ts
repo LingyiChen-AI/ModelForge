@@ -185,12 +185,16 @@ export type Badcase = {
   source_ref: string | null;
   status: string;
   annotation: Record<string, any> | null;
+  annotated_by_name: string | null;
+  annotated_at: string | null;
   dataset_version_id: number | null;
   fixed_by: { model_version_id: number; version_label: string; at?: string }[];
   created_at: string;
 };
 export const listBadcases = (p?: { model_version_id?: number; status?: string; category?: string }) =>
   api.get<Badcase[]>("/badcases", { params: p ?? {} }).then(r => r.data);
+export const listBadcasesPaged = (p: { model_version_id: number; bucket?: string; page: number; page_size: number }) =>
+  getPaginated<Badcase>("/badcases", p);
 export const getBadcase = (id: number) => api.get<Badcase>(`/badcases/${id}`).then(r => r.data);
 export const annotateBadcase = (id: number, annotation: Record<string, any>) =>
   api.patch<Badcase>(`/badcases/${id}/annotate`, { annotation }).then(r => r.data);

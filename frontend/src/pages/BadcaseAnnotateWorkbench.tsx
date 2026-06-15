@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, Database, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, Check, Database, ChevronLeft, ChevronRight, UserRound, Clock } from "lucide-react";
 import {
-  listBadcases, listBadcaseSummary, annotateBadcase, buildBadcaseDataset, listBadcaseLabels,
+  listBadcases, listBadcasesPaged, listBadcaseSummary, annotateBadcase, buildBadcaseDataset, listBadcaseLabels,
   type Badcase, type BadcaseSummary,
 } from "../api/client";
-import { Badge, Button, PageHeader, EmptyState } from "../ui";
+import { Badge, Button, PageHeader, EmptyState, Pagination, fmtTime } from "../ui";
 import { toastError, toastSuccess } from "../toast";
 import { navigate } from "../router";
 import { BadcaseAnnotateForm, annotationValid } from "./BadcaseAnnotateForm";
@@ -22,22 +22,20 @@ function inputSummary(b: Badcase): string {
   return JSON.stringify(i);
 }
 
-type Filter = "all" | "pending" | "unfixed" | "fixed";
-const statusOf = (b: Badcase): Filter =>
-  b.status === "reported" ? "pending" : b.fixed_by.length > 0 ? "fixed" : "unfixed";
-
-// small status pill shown on each list row + in the editor header
+type Filter = "pending" | "unfixed" | "fixed" | "all";
 function StatusPill({ b }: { b: Badcase }) {
-  const s = statusOf(b);
-  if (s === "fixed") return <Badge tone="green" dot>已修复</Badge>;
-  if (s === "pending") return <Badge tone="amber" dot>未标注</Badge>;
+  if (b.fixed_by.length > 0) return <Badge tone="green" dot>已修复</Badge>;
+  if (b.status === "reported") return <Badge tone="amber" dot>未标注</Badge>;
   return <Badge tone="gray" dot>已标注</Badge>;
 }
 
 export function BadcaseAnnotateWorkbench({ modelVersionId }: { modelVersionId: number }) {
-  const [all, setAll] = useState<Badcase[]>([]);
   const [sum, setSum] = useState<BadcaseSummary | null>(null);
   const [filter, setFilter] = useState<Filter>("pending");
+  const [list, setList] = useState<Badcase[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [val, setVal] = useState<Record<string, any>>({});
   const [busy, setBusy] = useState(false);
@@ -47,54 +45,52 @@ export function BadcaseAnnotateWorkbench({ modelVersionId }: { modelVersionId: n
   const reloadSummary = () =>
     listBadcaseSummary().then(s => setSum(s.find(x => x.model_version_id === modelVersionId) ?? null));
 
+  const fetchList = (f: Filter, p: number, ps: number) =>
+    listBadcasesPaged({ model_version_id: modelVersionId, page: p, page_size: ps,
+                        ...(f === "all" ? {} : { bucket: f }) });
+
+  // initial load: labels + summary, then pick the first non-empty bucket
   useEffect(() => {
     setLoading(true);
     listBadcaseLabels(modelVersionId).then(setLabelOptions).catch(() => setLabelOptions([]));
-    Promise.all([listBadcases({ model_version_id: modelVersionId }), reloadSummary()])
-      .then(([rows]) => {
-        setAll(rows);
-        const pending = rows.filter(b => b.status === "reported");
-        setFilter(pending.length ? "pending" : "all");
-        setSelectedId((pending[0] ?? rows[0])?.id ?? null);
-      })
-      .finally(() => setLoading(false));
+    reloadSummary().finally(() => setLoading(false));
   }, [modelVersionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const counts = useMemo(() => ({
-    all: all.length,
-    pending: all.filter(b => statusOf(b) === "pending").length,
-    unfixed: all.filter(b => statusOf(b) === "unfixed").length,
-    fixed: all.filter(b => statusOf(b) === "fixed").length,
-  }), [all]);
-
-  const list = useMemo(
-    () => (filter === "all" ? all : all.filter(b => statusOf(b) === filter)),
-    [all, filter],
-  );
-  const selected = all.find(b => b.id === selectedId) ?? null;
-  const idxInList = list.findIndex(b => b.id === selectedId);
-
-  // keep a valid selection when the filter/list changes
+  // (re)load the current bucket page whenever filter/page/size change
   useEffect(() => {
-    if (!list.find(b => b.id === selectedId)) setSelectedId(list[0]?.id ?? null);
-  }, [filter]); // eslint-disable-line react-hooks/exhaustive-deps
+    fetchList(filter, page, pageSize).then(res => {
+      setList(res.items); setTotal(res.total);
+      setSelectedId(prev => (res.items.find(b => b.id === prev) ? prev : res.items[0]?.id ?? null));
+    }).catch(() => toastError("加载失败"));
+  }, [filter, page, pageSize, modelVersionId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const counts = useMemo(() => ({
+    pending: sum?.pending ?? 0,
+    unfixed: sum ? sum.annotated - sum.fixed : 0,
+    fixed: sum?.fixed ?? 0,
+    all: sum?.reported ?? 0,
+  }), [sum]);
+
+  const selected = list.find(b => b.id === selectedId) ?? null;
+  const idxInList = list.findIndex(b => b.id === selectedId);
   useEffect(() => { setVal(selected?.annotation ?? {}); }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const valid = selected ? annotationValid(selected.task_type, val) : false;
-
-  const goto = (i: number) => { if (list[i]) setSelectedId(list[i].id); };
+  const changeFilter = (f: Filter) => { setFilter(f); setPage(1); };
 
   const save = (advance: boolean) => {
     if (!selected) return;
+    const nextId = list[idxInList + 1]?.id ?? null;
     setBusy(true);
     annotateBadcase(selected.id, val)
-      .then(updated => {
+      .then(async () => {
         toastSuccess("已保存标注");
-        setAll(a => a.map(b => (b.id === updated.id ? updated : b)));
-        reloadSummary();
+        const [res] = await Promise.all([fetchList(filter, page, pageSize), reloadSummary()]);
+        setList(res.items); setTotal(res.total);
         if (advance) {
-          const next = list[idxInList + 1];
-          if (next) setSelectedId(next.id);
+          setSelectedId(nextId && res.items.find(b => b.id === nextId) ? nextId : res.items[0]?.id ?? null);
+        } else if (!res.items.find(b => b.id === selectedId)) {
+          setSelectedId(res.items[0]?.id ?? null);
         }
       })
       .catch(() => toastError("保存失败"))
@@ -108,8 +104,8 @@ export function BadcaseAnnotateWorkbench({ modelVersionId }: { modelVersionId: n
       if (cases.length === 0) { toastError("没有已标注未生成的 badcase"); return; }
       const res = await buildBadcaseDataset(cases.map(c => c.id));
       toastSuccess(`已生成训练集 ${res.dataset_name}`);
-      const rows = await listBadcases({ model_version_id: modelVersionId });
-      setAll(rows); reloadSummary();
+      const [l] = await Promise.all([fetchList(filter, page, pageSize), reloadSummary()]);
+      setList(l.items); setTotal(l.total);
     } catch {
       toastError("生成训练集失败");
     } finally {
@@ -119,12 +115,9 @@ export function BadcaseAnnotateWorkbench({ modelVersionId }: { modelVersionId: n
 
   const title = sum ? `${sum.model_name ?? sum.model_version_id} · V${sum.model_version_label ?? "?"}` : "数据标注工作台";
   const pct = sum && sum.reported > 0 ? Math.round((sum.annotated / sum.reported) * 100) : 0;
-
   const TABS: { key: Filter; label: string }[] = [
-    { key: "pending", label: "未标注" },
-    { key: "unfixed", label: "未修复" },
-    { key: "fixed", label: "已修复" },
-    { key: "all", label: "全部" },
+    { key: "pending", label: "未标注" }, { key: "unfixed", label: "未修复" },
+    { key: "fixed", label: "已修复" }, { key: "all", label: "全部" },
   ];
 
   return (
@@ -142,7 +135,6 @@ export function BadcaseAnnotateWorkbench({ modelVersionId }: { modelVersionId: n
         }
       />
 
-      {/* progress bar */}
       {sum && (
         <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
           <div className="h-full rounded-full bg-brand-500 transition-all duration-500" style={{ width: `${pct}%` }} />
@@ -154,19 +146,19 @@ export function BadcaseAnnotateWorkbench({ modelVersionId }: { modelVersionId: n
       ) : (
         <div className="flex h-[72vh] overflow-hidden rounded-xl border border-slate-200 bg-white">
           {/* ── left: case list ── */}
-          <div className="flex w-[300px] shrink-0 flex-col border-r border-slate-200">
-            <div className="flex shrink-0 gap-1 border-b border-slate-200 p-2">
+          <div className="flex w-[320px] shrink-0 flex-col border-r border-slate-200">
+            <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 p-2">
               {TABS.map(t => (
                 <button
-                  key={t.key} onClick={() => setFilter(t.key)}
-                  className={"flex-1 rounded-md px-1.5 py-1.5 text-[12px] transition cursor-pointer " +
+                  key={t.key} onClick={() => changeFilter(t.key)}
+                  className={"shrink-0 whitespace-nowrap rounded-md px-2.5 py-1.5 text-[12.5px] transition cursor-pointer " +
                     (filter === t.key ? "bg-brand-50 font-medium text-brand-700" : "text-slate-500 hover:bg-slate-50")}
                 >
-                  {t.label}<span className="ml-1 text-[11px] opacity-70">{counts[t.key]}</span>
+                  {t.label} <span className="text-[11px] opacity-70">{counts[t.key]}</span>
                 </button>
               ))}
             </div>
-            <div className="flex-1 overflow-y-auto">
+            <div className="min-h-0 flex-1 overflow-y-auto">
               {list.length === 0 ? (
                 <div className="py-12 text-center text-[12.5px] text-slate-400">该分类下暂无 badcase</div>
               ) : list.map(b => (
@@ -185,6 +177,9 @@ export function BadcaseAnnotateWorkbench({ modelVersionId }: { modelVersionId: n
                 </button>
               ))}
             </div>
+            <div className="shrink-0 border-t border-slate-100 px-3 py-2">
+              <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={s => { setPageSize(s); setPage(1); }} />
+            </div>
           </div>
 
           {/* ── right: annotation editor ── */}
@@ -192,19 +187,25 @@ export function BadcaseAnnotateWorkbench({ modelVersionId }: { modelVersionId: n
             {selected ? (
               <>
                 <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 px-5 py-3">
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="font-mono text-[13px] text-slate-500">Badcase #{selected.id}</span>
                     <StatusPill b={selected} />
                     {selected.fixed_by.map(f => <Badge key={f.version_label} tone="green">V{f.version_label}</Badge>)}
                   </div>
-                  <div className="flex items-center gap-1 text-[12px] text-slate-400">
-                    <button className="rounded p-1 hover:bg-slate-100 disabled:opacity-30 cursor-pointer" disabled={idxInList <= 0} onClick={() => goto(idxInList - 1)}><ChevronLeft size={16} /></button>
+                  <div className="flex shrink-0 items-center gap-1 text-[12px] text-slate-400">
+                    <button className="rounded p-1 hover:bg-slate-100 disabled:opacity-30 cursor-pointer" disabled={idxInList <= 0} onClick={() => list[idxInList - 1] && setSelectedId(list[idxInList - 1].id)}><ChevronLeft size={16} /></button>
                     <span className="tabular-nums">{idxInList + 1} / {list.length}</span>
-                    <button className="rounded p-1 hover:bg-slate-100 disabled:opacity-30 cursor-pointer" disabled={idxInList >= list.length - 1} onClick={() => goto(idxInList + 1)}><ChevronRight size={16} /></button>
+                    <button className="rounded p-1 hover:bg-slate-100 disabled:opacity-30 cursor-pointer" disabled={idxInList >= list.length - 1} onClick={() => list[idxInList + 1] && setSelectedId(list[idxInList + 1].id)}><ChevronRight size={16} /></button>
                   </div>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto p-5">
                   <BadcaseAnnotateForm badcase={selected} val={val} onChange={setVal} labelOptions={labelOptions} />
+                  {(selected.annotated_by_name || selected.annotated_at) && (
+                    <div className="mt-4 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-3 text-[12px] text-slate-400">
+                      {selected.annotated_by_name && <span className="flex items-center gap-1"><UserRound size={13} /> 标注人 {selected.annotated_by_name}</span>}
+                      {selected.annotated_at && <span className="flex items-center gap-1"><Clock size={13} /> {fmtTime(selected.annotated_at)}</span>}
+                    </div>
+                  )}
                 </div>
                 <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-100 px-5 py-3">
                   <Button variant="subtle" disabled={busy || !valid} onClick={() => save(false)}>保存</Button>
