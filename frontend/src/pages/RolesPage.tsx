@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DEFAULT_PAGE_SIZE } from "../constants";
 import { ShieldCheck, Plus, Trash2, Lock, Check, Pencil } from "lucide-react";
 import { listRolesPaged, createRole, updateRole, deleteRole, listPermissions, type Role, type Permission } from "../api/client";
 import { Badge, Button, Drawer, EmptyState, Field, Input, Select, PageHeader, Pagination, TableShell, CreatedAt, cx } from "../ui";
@@ -10,7 +11,7 @@ export function RolesPage() {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [total, setTotal] = useState(0);
   const [busy, setBusy] = useState(false);
   const [delId, setDelId] = useState<number | null>(null);

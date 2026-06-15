@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DEFAULT_PAGE_SIZE } from "../constants";
 import { KeyRound, Plus, Copy, Check, Ban } from "lucide-react";
 import { listApiKeysPaged, createApiKey, revokeApiKey, type ApiKey } from "../api/client";
 import { Badge, Button, ConfirmDialog, Drawer, EmptyState, Field, Input, Mono, PageHeader, Pagination, TableShell, Creator, CreatedAt } from "../ui";
@@ -13,7 +14,7 @@ export function ApiKeysPage() {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [total, setTotal] = useState(0);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);

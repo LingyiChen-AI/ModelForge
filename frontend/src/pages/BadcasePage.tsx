@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DEFAULT_PAGE_SIZE } from "../constants";
 import { Bug, BookText, PencilLine } from "lucide-react";
 import { listBadcaseSummaryPaged, listBadcaseRules, type BadcaseSummary } from "../api/client";
 import { Badge, Button, EmptyState, PageHeader, Pagination, TableShell } from "../ui";
@@ -14,7 +15,7 @@ export function BadcasePage() {
   const [rows, setRows] = useState<BadcaseSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [total, setTotal] = useState(0);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [rules, setRules] = useState<any[]>([]);

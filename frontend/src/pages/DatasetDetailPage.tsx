@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DEFAULT_PAGE_SIZE } from "../constants";
 import { ArrowLeft, Upload, FileSpreadsheet, Layers, Download } from "lucide-react";
 import { listVersionsPaged, listDatasets, uploadVersion, downloadTemplate, downloadVersion, type Dataset, type DatasetVersion, type TemplateFormat } from "../api/client";
 import { Button, Drawer, EmptyState, Field, Input, Mono, PageHeader, Pagination, TableShell, Creator, CreatedAt } from "../ui";
@@ -28,7 +29,7 @@ export function DatasetDetailPage({ id }: { id: number }) {
   const [ds, setDs] = useState<Dataset | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [total, setTotal] = useState(0);
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);

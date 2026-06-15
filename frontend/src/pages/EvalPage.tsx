@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DEFAULT_PAGE_SIZE } from "../constants";
 import { BarChart3, FlaskConical, Trash2 } from "lucide-react";
 import { listEvalRunsPaged, createEvalRun, deleteEvalRun, listModelVersions, listVersionOptions, type EvalRun, type ModelVersion, type VersionOption } from "../api/client";
 import { Button, ConfirmDialog, Drawer, EmptyState, Field, Mono, PageHeader, Pagination, Select, StatusBadge, TableShell, Creator, CreatedAt } from "../ui";
@@ -15,7 +16,7 @@ export function EvalPage() {
   const [runs, setRuns] = useState<EvalRun[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [total, setTotal] = useState(0);
   const [models, setModels] = useState<ModelVersion[]>([]);
   const [evalVersions, setEvalVersions] = useState<VersionOption[]>([]);

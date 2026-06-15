@@ -1,6 +1,7 @@
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { PAGE_SIZE_OPTIONS } from "./constants";
 import { Loader2, X, ChevronLeft, ChevronRight, ChevronDown, Search, Check } from "lucide-react";
 
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
@@ -423,7 +424,7 @@ export function Pagination({
             onChange={e => onPageSize(Number(e.target.value))}
             className="h-7 rounded-md border border-slate-200 bg-white px-1.5 text-[12.5px] text-slate-600 cursor-pointer"
           >
-            {[10, 20, 50, 100].map(s => <option key={s} value={s}>{s} / 页</option>)}
+            {PAGE_SIZE_OPTIONS.map(s => <option key={s} value={s}>{s} / 页</option>)}
           </select>
         )}
         <button className={btn} disabled={page <= 1} onClick={() => onPage(1)} aria-label="首页">«</button>

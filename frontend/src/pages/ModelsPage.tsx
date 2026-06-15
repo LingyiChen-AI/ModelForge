@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DEFAULT_PAGE_SIZE } from "../constants";
 import { Boxes, Plus, Trash2, History } from "lucide-react";
 import { listModelsPaged, createModel, deleteModel, setModelStage, listModelTrainings, type Model, type ModelTraining } from "../api/client";
 import { Badge, Button, ConfirmDialog, Drawer, EmptyState, Field, Input, Select, PageHeader, Pagination, TableShell, Creator, CreatedAt, StatusBadge, fmtTime } from "../ui";
@@ -23,7 +24,7 @@ export function ModelsPage() {
   const [items, setItems] = useState<Model[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [total, setTotal] = useState(0);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);

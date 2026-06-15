@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DEFAULT_PAGE_SIZE } from "../constants";
 import { Cpu, Play, LineChart, Trash2 } from "lucide-react";
 import { listJobsPaged, createJob, deleteJob, listDatasetTree, listModels, getConfig, type TrainingJob, type DatasetNode, type Model } from "../api/client";
 import { Button, CascadeSelect, ConfirmDialog, Drawer, EmptyState, Field, Input, Mono, PageHeader, Pagination, Select, StatusBadge, TableShell, Creator, CreatedAt } from "../ui";
@@ -57,7 +58,7 @@ export function TrainingPage() {
   const [jobs, setJobs] = useState<TrainingJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [total, setTotal] = useState(0);
   const [tree, setTree] = useState<DatasetNode[]>([]);
   const [evalTree, setEvalTree] = useState<DatasetNode[]>([]);

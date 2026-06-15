@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DEFAULT_PAGE_SIZE } from "../constants";
 import { Database, Plus, ChevronRight, Download } from "lucide-react";
 import { listDatasetsPaged, createDataset, downloadTemplateByType, type Dataset, type TemplateFormat } from "../api/client";
 import { Button, Drawer, EmptyState, Field, Input, Select, Badge, PageHeader, Pagination, TableShell, Creator, CreatedAt } from "../ui";
@@ -20,7 +21,7 @@ export function DatasetsPage() {
   const [items, setItems] = useState<Dataset[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [total, setTotal] = useState(0);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);

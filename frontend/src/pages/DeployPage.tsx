@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { DEFAULT_PAGE_SIZE } from "../constants";
 import { Rocket, Square, Code2, Copy, Check, Play, Trash2 } from "lucide-react";
 import { listDeploymentsPaged, createDeployment, stopDeployment, startDeployment, deleteDeployment, listModelVersions, type Deployment, type ModelVersion } from "../api/client";
 import { Button, ConfirmDialog, Drawer, EmptyState, Field, Mono, PageHeader, Pagination, Select, StatusBadge, TableShell, Creator, CreatedAt, Badge } from "../ui";
@@ -32,7 +33,7 @@ export function DeployPage() {
   const [items, setItems] = useState<Deployment[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [total, setTotal] = useState(0);
   const [models, setModels] = useState<ModelVersion[]>([]);
   const [open, setOpen] = useState(false);

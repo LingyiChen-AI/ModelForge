@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { DEFAULT_PAGE_SIZE } from "../constants";
 import { ArrowLeft, Check, Database, ChevronLeft, ChevronRight, UserRound, Clock, SkipForward } from "lucide-react";
 import {
   listBadcases, listBadcasesPaged, listBadcaseSummary, annotateBadcase, buildBadcaseDataset, listBadcaseLabels,
@@ -35,7 +36,7 @@ export function BadcaseAnnotateWorkbench({ modelVersionId }: { modelVersionId: n
   const [list, setList] = useState<Badcase[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [val, setVal] = useState<Record<string, any>>({});
   const [busy, setBusy] = useState(false);
