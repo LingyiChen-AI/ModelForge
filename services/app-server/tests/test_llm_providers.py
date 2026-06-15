@@ -25,3 +25,14 @@ def test_provider_delete_cascades_models(session_factory):
     db.add(p); db.commit()
     db.delete(p); db.commit()
     assert db.execute(select(LlmModel)).first() is None
+
+
+def test_bootstrap_has_llm_manage(session_factory):
+    from app import bootstrap
+    from app.models.rbac import Permission, Role
+    from sqlalchemy import select
+    db = session_factory()
+    bootstrap.seed(db)
+    assert db.execute(select(Permission).where(Permission.code == "llm:manage")).scalar_one_or_none()
+    admin = db.execute(select(Role).where(Role.name == "admin")).scalar_one()
+    assert "llm:manage" in [p.code for p in admin.permissions]
