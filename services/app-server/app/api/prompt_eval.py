@@ -9,9 +9,10 @@ from app.models.prompt import PromptVersion
 from app.models.dataset import Dataset, DatasetVersion
 from app.models.llm import LlmModel, LlmProvider
 from app.models.prompt_eval import PromptEvalRun, PromptEvalArm, PromptEvalItem
-from app.schemas.prompt_eval import PromptEvalCreate, PromptEvalOut, PromptEvalDetailOut, ItemOut, VerdictIn, OutputOut
+from app.schemas.prompt_eval import PromptEvalCreate, PromptEvalOut, PromptEvalDetailOut, ItemOut, VerdictIn, OutputOut, AiEvaluateIn
 from app.services import prompt_eval_service as svc
 from app.services import prompt_eval_stats
+from app.services import ai_eval_service
 from app.pagination import paginate
 
 router = APIRouter(prefix="/prompt-evals", tags=["prompt-evals"])
@@ -80,7 +81,10 @@ def list_items(run_id: int, response: Response, bucket: str = "all",
             row_index=it.row_index, inputs=it.inputs,
             outputs=[OutputOut.model_validate(o) for o in shuffled],
             winner_arm_id=it.winner_arm_id, all_bad=it.all_bad, is_good=it.is_good,
-            annotated_by_name=it.annotated_by_name, evaluated_at=it.evaluated_at))
+            annotated_by_name=it.annotated_by_name, evaluated_at=it.evaluated_at,
+            ai_winner_arm_id=it.ai_winner_arm_id, ai_all_bad=it.ai_all_bad, ai_is_good=it.ai_is_good,
+            ai_model_id=it.ai_model_id, ai_reasoning=it.ai_reasoning, ai_evaluated_at=it.ai_evaluated_at,
+        ))
     return out
 
 
@@ -98,7 +102,20 @@ def submit_verdict(item_id: int, body: VerdictIn,
         row_index=item.row_index, inputs=item.inputs,
         outputs=[OutputOut.model_validate(o) for o in item.outputs],
         winner_arm_id=item.winner_arm_id, all_bad=item.all_bad, is_good=item.is_good,
-        annotated_by_name=item.annotated_by_name, evaluated_at=item.evaluated_at)
+        annotated_by_name=item.annotated_by_name, evaluated_at=item.evaluated_at,
+        ai_winner_arm_id=item.ai_winner_arm_id, ai_all_bad=item.ai_all_bad, ai_is_good=item.ai_is_good,
+        ai_model_id=item.ai_model_id, ai_reasoning=item.ai_reasoning, ai_evaluated_at=item.ai_evaluated_at,
+    )
+
+
+@router.post("/{run_id}/ai-evaluate")
+def ai_evaluate(run_id: int, body: AiEvaluateIn,
+                _: User = Depends(require("prompteval:annotate")), db: Session = Depends(get_db)):
+    try:
+        ai_eval_service.dispatch(db, run_id, body.model_id)
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    return {"dispatched": True}
 
 
 @router.get("/{run_id}/stats")

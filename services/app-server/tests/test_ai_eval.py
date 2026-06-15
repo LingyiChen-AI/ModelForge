@@ -47,3 +47,45 @@ def test_ai_eval_service_prompt_and_dispatch(session_factory, monkeypatch):
     import pytest
     with pytest.raises(ValueError):
         svc.dispatch(db, run.id, 999999)
+
+
+from fastapi.testclient import TestClient
+
+
+def test_settings_and_trigger_api(session_factory, monkeypatch):
+    import app.services.ai_eval_service as svc
+    from app.models.llm import LlmProvider, LlmModel
+    from app.models.prompt_eval import PromptEvalRun, PromptEvalArm, PromptEvalItem
+    db = session_factory()
+    prov = LlmProvider(name="p", base_url="u", api_key="k"); prov.models.append(LlmModel(model_id="m"))
+    db.add(prov)
+    run = PromptEvalRun(name="r", eval_type="multi_prompt", prompt_version_ids=[1],
+                        model_ids=[1], dataset_version_ids=[1])
+    run.arms.append(PromptEvalArm(arm_index=0, prompt_version_id=1, model_id=1, label="A"))
+    db.add(run); db.commit(); db.refresh(prov); db.refresh(run)
+    it = PromptEvalItem(run_id=run.id, item_index=0, dataset_version_id=1, row_index=0, inputs={})
+    db.add(it); db.commit()
+    mid, rid, iid = prov.models[0].id, run.id, it.id
+    admin = make_user(db, codes=("llm:manage", "prompteval:read", "prompteval:annotate"), data_scope="all", email="ad@x.com")
+    H = auth_headers(admin.id); db.close()
+    from app.main import app
+    monkeypatch.setattr(svc, "send_prompt_ai_eval_task", lambda rid, mid, jp: "celery-ai-1")
+    c = TestClient(app)
+    g = c.get("/settings/ai-eval-prompt", headers=H).json()
+    assert "JSON" in g["value"]
+    assert c.put("/settings/ai-eval-prompt", json={"value": "改过了"}, headers=H).status_code == 200
+    assert c.get("/settings/ai-eval-prompt", headers=H).json()["value"] == "改过了"
+    assert c.post(f"/prompt-evals/{rid}/ai-evaluate", json={"model_id": mid}, headers=H).status_code == 200
+    assert c.post(f"/prompt-evals/{rid}/ai-evaluate", json={"model_id": 999999}, headers=H).status_code == 422
+    items = c.get(f"/prompt-evals/{rid}/items", headers=H).json()
+    assert items[0]["ai_winner_arm_id"] is None and "ai_reasoning" in items[0]
+
+
+def test_settings_requires_perm(session_factory):
+    db = session_factory()
+    u = make_user(db, codes=("prompteval:read",), data_scope="all", email="np@x.com")
+    H = auth_headers(u.id); db.close()
+    from app.main import app
+    from fastapi.testclient import TestClient
+    c = TestClient(app)
+    assert c.get("/settings/ai-eval-prompt", headers=H).status_code == 403

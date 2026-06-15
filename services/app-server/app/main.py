@@ -79,3 +79,6 @@ app.include_router(prompt.router)
 
 from app.api import prompt_eval
 app.include_router(prompt_eval.router)
+
+from app.api import settings as settings_api
+app.include_router(settings_api.router)

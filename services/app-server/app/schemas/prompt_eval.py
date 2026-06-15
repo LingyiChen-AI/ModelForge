@@ -66,6 +66,12 @@ class ItemOut(BaseModel):
     is_good: bool | None = None
     annotated_by_name: str | None = None
     evaluated_at: datetime | None = None
+    ai_winner_arm_id: int | None = None
+    ai_all_bad: bool = False
+    ai_is_good: bool | None = None
+    ai_model_id: int | None = None
+    ai_reasoning: str | None = None
+    ai_evaluated_at: datetime | None = None
 
     class Config:
         from_attributes = True
@@ -75,3 +81,7 @@ class VerdictIn(BaseModel):
     winner_arm_id: int | None = None
     all_bad: bool = False
     is_good: bool | None = None
+
+
+class AiEvaluateIn(BaseModel):
+    model_id: int
