@@ -39,6 +39,36 @@ def annotate(db: Session, case_id: int, annotation: dict, user_id: int) -> Badca
     return case
 
 
+def summary(db: Session) -> list[dict]:
+    cases = list(db.execute(select(Badcase)).scalars())
+    by: dict[int, dict] = {}
+    for c in cases:
+        s = by.setdefault(c.model_version_id, {
+            "model_version_id": c.model_version_id,
+            "model_name": c.model_name,
+            "model_version_label": c.model_version_label,
+            "task_type": c.task_type,
+            "reported": 0, "annotated": 0, "used": 0, "pending": 0, "fixed": 0,
+            "_versions": set()})
+        s["reported"] += 1
+        if c.status in ("annotated", "used"):
+            s["annotated"] += 1
+        if c.status == "used":
+            s["used"] += 1
+        if c.status == "reported":
+            s["pending"] += 1
+        if c.fixed_by:
+            s["fixed"] += 1
+            for e in c.fixed_by:
+                if e.get("version_label"):
+                    s["_versions"].add(str(e["version_label"]))
+    out = []
+    for s in by.values():
+        s["fixed_versions"] = sorted(s.pop("_versions"), key=lambda v: (0, int(v)) if v.isdigit() else (1, v))
+        out.append(s)
+    return sorted(out, key=lambda x: x["model_version_id"], reverse=True)
+
+
 def build_dataset(db: Session, badcase_ids: list[int], name: str | None, user_id: int):
     import pandas as pd
     if not badcase_ids:

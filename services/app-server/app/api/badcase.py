@@ -8,7 +8,7 @@ from app.models.user import User
 from app.models.api_key import ApiKey
 from app.models.badcase import Badcase
 from app import badcase_contracts as bc
-from app.schemas.badcase import BadcaseReportIn, BadcaseAnnotateIn, BuildDatasetIn, BadcaseOut
+from app.schemas.badcase import BadcaseReportIn, BadcaseAnnotateIn, BuildDatasetIn, BadcaseOut, BadcaseSummaryOut
 from app.services import badcase_service
 
 router = APIRouter(tags=["badcase"])
@@ -40,6 +40,11 @@ def list_badcases(model_version_id: int | None = None, status: str | None = None
     if category:
         q = q.where(Badcase.category == category)
     return list(db.execute(q).scalars())
+
+
+@router.get("/badcases/summary", response_model=list[BadcaseSummaryOut])
+def badcase_summary(_: User = Depends(require("badcase:read")), db: Session = Depends(get_db)):
+    return badcase_service.summary(db)
 
 
 @router.get("/badcases/{case_id}", response_model=BadcaseOut)

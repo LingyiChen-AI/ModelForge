@@ -63,6 +63,35 @@ def test_badcase_out_includes_fixed_by():
     assert out.fixed_by == []
 
 
+def test_badcase_summary_counts(tmp_path):
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.models import Base
+    from app.models.training import TrainingJob, ModelVersion
+    from app.models.badcase import Badcase
+    eng = create_engine(f"sqlite:///{tmp_path}/s.db"); Base.metadata.create_all(eng)
+    S = sessionmaker(bind=eng, expire_on_commit=False); db = S()
+    job = TrainingJob(name="j", dataset_version_id=1, base_model="b",
+                      task_type="classification", hyperparams={}); db.add(job); db.commit()
+    mv = ModelVersion(name="意图", source_training_job_id=job.id, mlflow_model_name="意图",
+                      mlflow_version="3", task_type="classification", base_model="b", train_metrics={})
+    db.add(mv); db.commit()
+    db.add_all([
+        Badcase(model_version_id=mv.id, task_type="classification", input={"text":"a"}, status="reported"),
+        Badcase(model_version_id=mv.id, task_type="classification", input={"text":"b"}, status="annotated", annotation={"label":"x"}),
+        Badcase(model_version_id=mv.id, task_type="classification", input={"text":"c"}, status="used",
+                annotation={"label":"y"}, fixed_by=[{"model_version_id": 99, "version_label": "4"}]),
+    ]); db.commit()
+    from app.services.badcase_service import summary
+    rows = summary(db)
+    assert len(rows) == 1
+    r = rows[0]
+    assert r["model_version_id"] == mv.id and r["model_name"] == "意图" and r["model_version_label"] == "3"
+    assert r["reported"] == 3 and r["annotated"] == 2 and r["used"] == 1
+    assert r["pending"] == 1 and r["fixed"] == 1
+    assert r["fixed_versions"] == ["4"]
+
+
 def test_annotate_missing_and_ok(session_factory, monkeypatch):
     mvid = _setup_version(session_factory)
     from app import db as dbmod

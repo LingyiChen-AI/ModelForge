@@ -37,3 +37,16 @@ class BadcaseOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class BadcaseSummaryOut(BaseModel):
+    model_version_id: int
+    model_name: str | None = None
+    model_version_label: str | None = None
+    task_type: str
+    reported: int    # total badcases for this model version
+    annotated: int   # status in (annotated, used)
+    used: int        # status == used (already turned into a dataset)
+    pending: int     # status == reported (awaiting annotation)
+    fixed: int       # fixed_by non-empty
+    fixed_versions: list[str] = []   # distinct model-version labels that fixed any badcase (V4, V7)
