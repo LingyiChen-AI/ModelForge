@@ -36,3 +36,14 @@ def test_bootstrap_has_llm_manage(session_factory):
     assert db.execute(select(Permission).where(Permission.code == "llm:manage")).scalar_one_or_none()
     admin = db.execute(select(Role).where(Role.name == "admin")).scalar_one()
     assert "llm:manage" in [p.code for p in admin.permissions]
+
+
+def test_provider_out_masks_key(session_factory):
+    from app.models.llm import LlmProvider
+    from app.schemas.llm import ProviderOut
+    db = session_factory()
+    p = LlmProvider(name="x", base_url="u", api_key="sk-supersecret-9999")
+    db.add(p); db.commit(); db.refresh(p)
+    dumped = ProviderOut.model_validate(p).model_dump()
+    assert dumped["masked_key"] == "sk-…9999"
+    assert "api_key" not in dumped            # 完整 key 不出 schema
