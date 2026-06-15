@@ -40,9 +40,10 @@ def test_api_keys_endpoints(session_factory):
     r = c.post("/api-keys", json={"name": "svc", "scopes": ["badcase:report"]}, headers=H)
     assert r.status_code == 201
     body = r.json()
-    assert body["plaintext"].startswith("mf_")          # shown once
+    assert body["plaintext"].startswith("mf_")          # full key returned on create
     listed = c.get("/api-keys", headers=H).json()
-    assert listed and "plaintext" not in listed[0] and "key_hash" not in listed[0]
+    # plaintext is intentionally re-exposed in the list (re-copy convenience); hash never is
+    assert listed and listed[0]["plaintext"].startswith("mf_") and "key_hash" not in listed[0]
     kid = body["id"]
     # revoke -> list shows it revoked
     assert c.delete(f"/api-keys/{kid}", headers=H).status_code == 200

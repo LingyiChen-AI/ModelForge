@@ -10,10 +10,10 @@ __all__ = ["hash_key", "create_key", "verify", "list_keys", "revoke"]
 
 def create_key(db: Session, *, name: str, scopes: list[str],
                created_by: int | None) -> tuple[str, ApiKey]:
-    """Returns (plaintext, ApiKey). Plaintext is shown once and never stored."""
+    """Returns (plaintext, ApiKey). Plaintext is also stored so it can be re-copied."""
     plaintext, prefix = generate_key()
     key = ApiKey(name=name, key_prefix=prefix, key_hash=hash_key(plaintext),
-                 scopes=list(scopes), created_by=created_by)
+                 plaintext=plaintext, scopes=list(scopes), created_by=created_by)
     db.add(key); db.commit(); db.refresh(key)
     return plaintext, key
 

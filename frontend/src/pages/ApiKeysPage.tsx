@@ -20,6 +20,13 @@ export function ApiKeysPage() {
   const [copied, setCopied] = useState(false);
   const [revoke, setRevoke] = useState<ApiKey | null>(null);
   const [revBusy, setRevBusy] = useState(false);
+  const [copiedId, setCopiedId] = useState<number | null>(null);
+  const copyKey = (k: ApiKey) => {
+    navigator.clipboard.writeText(k.plaintext ?? k.key_prefix);
+    setCopiedId(k.id);
+    setTimeout(() => setCopiedId(c => (c === k.id ? null : c)), 1500);
+    toastSuccess(k.plaintext ? "已复制完整 Key" : "该 Key 创建较早无明文,仅复制了前缀");
+  };
   const reload = () => listApiKeys().then(setKeys);
   useEffect(() => { reload().finally(() => setLoading(false)); }, []);
 
@@ -39,11 +46,11 @@ export function ApiKeysPage() {
 
   return (
     <>
-      <PageHeader title="API Key" subtitle="对外鉴权令牌:用于在线推理调用与 Badcase 上报。明文仅在创建时显示一次。"
+      <PageHeader title="API Key" subtitle="对外鉴权令牌:用于在线推理调用与 Badcase 上报。可随时复制完整明文。"
         actions={<Button variant="primary" onClick={openDrawer}><Plus size={16} /> 新建 Key</Button>} />
 
       <TableShell loading={loading} empty={keys.length === 0}
-        head={<><th>名称</th><th>前缀</th><th>权限范围</th><th>状态</th><th>创建者</th><th className="w-36">创建时间</th><th className="w-20 text-right"></th></>}>
+        head={<><th>名称</th><th>前缀</th><th>权限范围</th><th>状态</th><th>创建者</th><th className="w-36">创建时间</th><th className="w-44 text-right"></th></>}>
         {keys.length === 0 ? <EmptyState icon={<KeyRound size={22} />} title="还没有 API Key" /> :
           keys.map(k => (
             <tr key={k.id}>
@@ -53,7 +60,14 @@ export function ApiKeysPage() {
               <td>{k.revoked_at ? <Badge tone="gray" dot>已吊销</Badge> : <Badge tone="green" dot>有效</Badge>}</td>
               <td><Creator name={k.created_by_name} /></td>
               <td><CreatedAt at={k.created_at} /></td>
-              <td className="text-right">{!k.revoked_at && <Button size="sm" variant="danger" onClick={() => setRevoke(k)}><Ban size={13} /> 吊销</Button>}</td>
+              <td className="text-right">
+                <div className="flex items-center justify-end gap-2">
+                  <Button size="sm" variant="subtle" onClick={() => copyKey(k)}>
+                    {copiedId === k.id ? <Check size={13} /> : <Copy size={13} />} 复制
+                  </Button>
+                  {!k.revoked_at && <Button size="sm" variant="danger" onClick={() => setRevoke(k)}><Ban size={13} /> 吊销</Button>}
+                </div>
+              </td>
             </tr>
           ))}
       </TableShell>

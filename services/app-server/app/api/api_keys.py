@@ -20,10 +20,9 @@ def create_key(body: ApiKeyCreate, user: User = Depends(require("apikey:manage")
     bad = [s for s in body.scopes if s not in VALID_SCOPES]
     if bad or not body.scopes:
         raise HTTPException(422, f"scopes must be a non-empty subset of {sorted(VALID_SCOPES)}")
-    plaintext, key = api_key_service.create_key(db, name=body.name, scopes=body.scopes,
-                                                created_by=user.id)
-    out = ApiKeyOut.model_validate(key)
-    return ApiKeyCreated(**out.model_dump(), plaintext=plaintext)
+    _plaintext, key = api_key_service.create_key(db, name=body.name, scopes=body.scopes,
+                                                 created_by=user.id)
+    return ApiKeyCreated.model_validate(key)  # key.plaintext is stored, so this carries it
 
 
 @router.delete("/{key_id}")
