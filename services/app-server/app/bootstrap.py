@@ -17,11 +17,12 @@ PERMISSION_CATALOG = [
     ("llm:manage", "LLM 供应商配置"),
     ("prompt:read", "看 Prompt"), ("prompt:write", "管理 Prompt"),
     ("prompteval:read", "看 Prompt 评测"), ("prompteval:run", "发起 Prompt 评测"),
+    ("prompteval:annotate", "标注 Prompt 评估"),
     ("badcase:read", "看 Badcase / 上报规则"), ("badcase:annotate", "标注 Badcase"),
     ("*", "通配"),
 ]
 READS = ["dataset:read", "training:read", "model:read", "eval:read", "deploy:read", "badcase:read", "prompt:read", "prompteval:read"]
-BUSINESS = READS + ["dataset:write", "training:run", "eval:run", "deploy:write", "model:write", "badcase:annotate", "prompt:write", "prompteval:run"]
+BUSINESS = READS + ["dataset:write", "training:run", "eval:run", "deploy:write", "model:write", "badcase:annotate", "prompt:write", "prompteval:run", "prompteval:annotate"]
 ADMIN_PERMS = BUSINESS + ["apikey:manage", "llm:manage"]
 SYSTEM_ROLES = [
     ("superadmin", "超级管理员", "all", True, ["*"]),

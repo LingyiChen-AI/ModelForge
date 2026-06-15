@@ -6,7 +6,7 @@ def test_seed_idempotent(session_factory):
     S = session_factory
     db = S()
     seed(db); seed(db)  # 跑两次
-    assert db.execute(select(func.count()).select_from(Permission)).scalar() == 21
+    assert db.execute(select(func.count()).select_from(Permission)).scalar() == 22
     roles = {r.name: r for r in db.execute(select(Role)).scalars()}
     assert set(roles) == {"superadmin", "admin", "member", "viewer"}
     assert roles["superadmin"].is_system is True

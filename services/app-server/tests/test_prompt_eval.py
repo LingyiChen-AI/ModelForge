@@ -186,3 +186,16 @@ def test_item_verdict_columns(session_factory):
     db.add(it); db.commit(); db.refresh(it)
     assert it.winner_arm_id == run.arms[0].id and it.all_bad is False and it.is_good is None
     assert it.annotated_by_name == "judge"
+
+
+def test_bootstrap_has_prompteval_annotate(session_factory):
+    from app import bootstrap
+    from app.models.rbac import Permission, Role
+    from sqlalchemy import select
+    db = session_factory()
+    bootstrap.seed(db)
+    assert db.execute(select(Permission).where(Permission.code == "prompteval:annotate")).scalar_one_or_none()
+    member = db.execute(select(Role).where(Role.name == "member")).scalar_one()
+    viewer = db.execute(select(Role).where(Role.name == "viewer")).scalar_one()
+    assert "prompteval:annotate" in {p.code for p in member.permissions}
+    assert "prompteval:annotate" not in {p.code for p in viewer.permissions}
