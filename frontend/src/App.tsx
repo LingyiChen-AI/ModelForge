@@ -10,6 +10,7 @@ import { UsersPage } from "./pages/UsersPage";
 import { RolesPage } from "./pages/RolesPage";
 import { ApiKeysPage } from "./pages/ApiKeysPage";
 import { BadcasePage } from "./pages/BadcasePage";
+import { BadcaseAnnotateWorkbench } from "./pages/BadcaseAnnotateWorkbench";
 import { useAuth } from "./context/AuthContext";
 import { AppShell } from "./components/AppShell";
 import { Spinner } from "./ui";
@@ -40,6 +41,9 @@ export default function App() {
   else if (path === "/users") page = <UsersPage />;
   else if (path === "/roles") page = <RolesPage />;
   else if (path === "/api-keys") page = <ApiKeysPage />;
+  else if (/^\/badcase\/annotate\/\d+$/.test(path)) {
+    page = <BadcaseAnnotateWorkbench modelVersionId={Number(path.split("/")[3])} />;
+  }
   else if (path.startsWith("/badcase")) page = <BadcasePage />;
 
   return <AppShell path={path}>{page}</AppShell>;
