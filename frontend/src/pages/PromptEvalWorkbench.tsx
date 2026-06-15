@@ -71,6 +71,7 @@ export function PromptEvalWorkbench({ runId }: { runId: number }) {
                     className={`block w-full border-b border-slate-50 px-3 py-2 text-left text-[13px] ${i.id === curId ? "bg-brand-50" : "hover:bg-slate-50"}`}>
                     <span className="text-slate-700">#{i.item_index + 1}</span>
                     {i.evaluated_at && <Check size={12} className="ml-2 inline text-emerald-500" />}
+                    {i.ai_evaluated_at && <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] text-violet-600">AI</span>}
                   </button>
                 ))}
           </div>
@@ -117,6 +118,22 @@ export function PromptEvalWorkbench({ runId }: { runId: number }) {
                 <Button variant="subtle" disabled={busy} onClick={goNext}><SkipForward size={14} /> 跳过</Button>
                 {cur.evaluated_at && <span className="ml-auto text-[12px] text-slate-400">已评 · {cur.annotated_by_name ?? "?"} · {cur.evaluated_at.slice(0, 19).replace("T", " ")}</span>}
               </div>
+              {cur.ai_evaluated_at && (
+                <div className="rounded-xl bg-violet-50 p-3 ring-1 ring-violet-100">
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="rounded bg-violet-600 px-1.5 py-0.5 text-[11px] font-medium text-white">AI 评估</span>
+                    <span className="text-[12.5px] text-slate-600">
+                      {single
+                        ? (cur.ai_is_good === true ? "判定:好" : cur.ai_is_good === false ? "判定:坏" : "未判定")
+                        : (cur.ai_all_bad ? "判定:都一样坏"
+                            : cur.ai_winner_arm_id != null
+                              ? `选了 ${LETTERS[cur.outputs.findIndex(o => o.arm_id === cur.ai_winner_arm_id)] ?? "?"}`
+                              : "未判定")}
+                    </span>
+                  </div>
+                  {cur.ai_reasoning && <pre className="whitespace-pre-wrap text-[12px] text-slate-500">{cur.ai_reasoning}</pre>}
+                </div>
+              )}
             </div>
           )}
         </div>
