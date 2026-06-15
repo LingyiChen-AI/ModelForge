@@ -11,6 +11,7 @@ from app.schemas.training import TrainingJobCreate, TrainingJobOut
 from app.services import training_service
 from app.services.mlflow_sync import upsert_model_version_from_result
 from app.services.delete_service import delete_training_job
+from app.services.badcase_service import mark_fixed
 
 router = APIRouter(prefix="/training-jobs", tags=["training"])
 
@@ -51,9 +52,12 @@ class TrainResultIn(BaseModel):
     model_name: str
     version: str
     metrics: dict = {}
+    badcase_fixes: list[int] = []   # ids of badcases this newly trained version now predicts correctly
 
 @router.post("/internal/{job_id}/result", status_code=201,
              dependencies=[Depends(require_internal_token)])
 def report_result(job_id: int, body: TrainResultIn, db: Session = Depends(get_db)):
     mv = upsert_model_version_from_result(db, job_id, body.model_dump())
+    if body.badcase_fixes:
+        mark_fixed(db, body.badcase_fixes, model_version_id=mv.id, version_label=mv.mlflow_version)
     return {"model_version_id": mv.id}

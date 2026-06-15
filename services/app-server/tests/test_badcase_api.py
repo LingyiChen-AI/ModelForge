@@ -92,6 +92,87 @@ def test_badcase_summary_counts(tmp_path):
     assert r["fixed_versions"] == ["4"]
 
 
+def test_mark_fixed_appends_and_dedupes(tmp_path):
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.models import Base
+    from app.models.badcase import Badcase
+    eng = create_engine(f"sqlite:///{tmp_path}/f.db"); Base.metadata.create_all(eng)
+    S = sessionmaker(bind=eng, expire_on_commit=False); db = S()
+    b = Badcase(model_version_id=1, task_type="classification", input={"text":"a"},
+                status="used", annotation={"label":"x"}); db.add(b); db.commit()
+    from app.services.badcase_service import mark_fixed
+    mark_fixed(db, [b.id], model_version_id=5, version_label="4")
+    db.refresh(b)
+    assert len(b.fixed_by) == 1 and b.fixed_by[0]["model_version_id"] == 5 and b.fixed_by[0]["version_label"] == "4"
+    mark_fixed(db, [b.id], model_version_id=5, version_label="4")
+    db.refresh(b)
+    assert len(b.fixed_by) == 1
+    mark_fixed(db, [b.id], model_version_id=8, version_label="7")
+    db.refresh(b)
+    assert len(b.fixed_by) == 2 and b.fixed_by[1]["version_label"] == "7"
+
+
+def test_report_result_marks_badcases_fixed(tmp_path):
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.models import Base
+    from app.models.training import TrainingJob
+    from app.models.badcase import Badcase
+    from app.services.mlflow_sync import upsert_model_version_from_result
+    from app.services.badcase_service import mark_fixed
+    eng = create_engine(f"sqlite:///{tmp_path}/r.db"); Base.metadata.create_all(eng)
+    S = sessionmaker(bind=eng, expire_on_commit=False); db = S()
+    job = TrainingJob(name="j", dataset_version_id=1, base_model="b",
+                      task_type="classification", hyperparams={}); db.add(job); db.commit()
+    b = Badcase(model_version_id=1, task_type="classification", input={"text":"a"},
+                status="used", annotation={"label":"x"}); db.add(b); db.commit()
+    mv = upsert_model_version_from_result(db, job.id, {
+        "model_name": "意图", "version": "4", "metrics": {"accuracy": 0.9, "badcase_fix_rate": 0.5}})
+    mark_fixed(db, [b.id], model_version_id=mv.id, version_label=mv.mlflow_version)
+    db.refresh(b)
+    assert b.fixed_by[0]["version_label"] == "4"
+    assert mv.train_metrics["badcase_fix_rate"] == 0.5
+
+
+def test_report_result_endpoint_marks_fixed(session_factory):
+    """POST /training-jobs/internal/{job_id}/result with badcase_fixes wires the
+    real endpoint function, verifying the if body.badcase_fixes: branch is exercised."""
+    from app import db as dbmod
+    from app.models.training import TrainingJob
+    from app.models.badcase import Badcase
+    db = session_factory()
+    job = TrainingJob(name="j", dataset_version_id=1, base_model="b",
+                      task_type="classification", hyperparams={})
+    db.add(job); db.commit()
+    b = Badcase(model_version_id=1, task_type="classification", input={"text": "test"},
+                status="used", annotation={"label": "A"})
+    db.add(b); db.commit()
+    jid = job.id; bid = b.id; db.close()
+
+    from app.main import app
+    from app.auth import require_internal_token
+    app.dependency_overrides[require_internal_token] = lambda: None
+    try:
+        from fastapi.testclient import TestClient
+        c = TestClient(app)
+        r = c.post(f"/training-jobs/internal/{jid}/result", json={
+            "run_id": "run-abc", "model_name": "意图", "version": "5",
+            "metrics": {"accuracy": 0.95}, "badcase_fixes": [bid],
+        })
+        assert r.status_code == 201, r.text
+        mv_id = r.json()["model_version_id"]
+        # confirm badcase.fixed_by was updated in the DB
+        db2 = dbmod.SessionLocal()
+        bc = db2.get(Badcase, bid); db2.refresh(bc)
+        assert len(bc.fixed_by) == 1
+        assert bc.fixed_by[0]["version_label"] == "5"
+        assert bc.fixed_by[0]["model_version_id"] == mv_id
+        db2.close()
+    finally:
+        app.dependency_overrides.pop(require_internal_token, None)
+
+
 def test_annotate_missing_and_ok(session_factory, monkeypatch):
     mvid = _setup_version(session_factory)
     from app import db as dbmod

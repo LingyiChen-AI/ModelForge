@@ -9,6 +9,21 @@ from app.services.dataset_service import create_version
 from app.storage import build_storage
 
 
+def mark_fixed(db: Session, badcase_ids: list[int], model_version_id: int, version_label: str) -> None:
+    if not badcase_ids:
+        return
+    at = datetime.now(timezone.utc).isoformat()
+    cases = list(db.execute(select(Badcase).where(Badcase.id.in_(badcase_ids))).scalars())
+    for c in cases:
+        existing = list(c.fixed_by or [])
+        if any(e.get("model_version_id") == model_version_id for e in existing):
+            continue
+        existing.append({"model_version_id": model_version_id,
+                         "version_label": version_label, "at": at})
+        c.fixed_by = existing   # reassign so the JSON column is marked dirty
+    db.commit()
+
+
 def report(db: Session, body, source: str | None) -> Badcase:
     mv = db.get(ModelVersion, body.model_version_id)
     if not mv:
