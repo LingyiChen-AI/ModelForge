@@ -7,6 +7,12 @@ from worker.db import (JobStatus, load_prompt_eval_run, set_prompt_eval_status,
                        set_output_result)
 
 
+def _clean(v):
+    """空单元格在 parquet 里是 float NaN —— 转成 None,避免 json.dumps 产出非法的 NaN
+    导致 PostgreSQL JSON 列插入失败、整轮中断;渲染时 None→空串。"""
+    return None if isinstance(v, float) and v != v else v
+
+
 def run_prompt_eval(engine, run_id: int) -> None:
     set_prompt_eval_status(engine, run_id, JobStatus.RUNNING)
     set_prompt_eval_progress(engine, run_id, 0.02)
@@ -20,7 +26,7 @@ def run_prompt_eval(engine, run_id: int) -> None:
         df = read_snapshot(uri)
         cols = list(df.columns)
         for row_index, rec in enumerate(df.to_dict(orient="records")):
-            inputs = {k: rec[k] for k in cols}
+            inputs = {k: _clean(rec[k]) for k in cols}
             item_id = insert_eval_item(engine, run_id, item_index, dv_id, row_index, inputs)
             item_index += 1
             for arm in arms:

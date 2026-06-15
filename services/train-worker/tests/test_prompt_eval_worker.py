@@ -55,3 +55,21 @@ def test_run_prompt_eval(tmp_path, monkeypatch):
     assert run.status == "succeeded" and run.progress == 1.0
     # system 进了 messages
     assert calls[0][1][0]["role"] == "system"
+
+
+def test_run_prompt_eval_handles_nan_cells(tmp_path, monkeypatch):
+    # 回归:空单元格(NaN)不能因 json.dumps 产出 NaN 而中断整轮
+    import numpy as np
+    from modelforge_common.llm_client import ChatResult
+    import worker.prompt_eval as pe
+    eng = create_engine(f"sqlite:///{tmp_path}/t.db")
+    _setup(eng)
+    monkeypatch.setattr(pe, "read_snapshot", lambda uri: pd.DataFrame({"name": [np.nan]}))
+    monkeypatch.setattr(pe, "llm_chat",
+                        lambda *a, **k: ChatResult(content="ok", usage=None, raw={}))
+    pe.run_prompt_eval(eng, 1)
+    with eng.connect() as c:
+        inputs = c.execute(text("SELECT inputs FROM prompt_eval_items WHERE id IS NOT NULL")).scalar()
+        run = c.execute(text("SELECT status FROM prompt_eval_runs WHERE id=1")).scalar()
+    assert run == "succeeded"
+    assert "NaN" not in inputs and "null" in inputs   # NaN 已转成 JSON null
