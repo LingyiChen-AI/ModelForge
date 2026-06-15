@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Boxes, Plus, Trash2, History } from "lucide-react";
-import { listModels, createModel, deleteModel, setModelStage, listModelTrainings, type Model, type ModelTraining } from "../api/client";
-import { Badge, Button, ConfirmDialog, Drawer, EmptyState, Field, Input, Select, PageHeader, TableShell, Creator, CreatedAt, StatusBadge, fmtTime } from "../ui";
+import { listModelsPaged, createModel, deleteModel, setModelStage, listModelTrainings, type Model, type ModelTraining } from "../api/client";
+import { Badge, Button, ConfirmDialog, Drawer, EmptyState, Field, Input, Select, PageHeader, Pagination, TableShell, Creator, CreatedAt, StatusBadge, fmtTime } from "../ui";
 import { toastError } from "../toast";
 import { MetricChips } from "../components/MetricChips";
 import { ParamChips } from "../components/ParamChips";
@@ -22,6 +22,9 @@ export function ModelsPage() {
   const { can } = useAuth();
   const [items, setItems] = useState<Model[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [del, setDel] = useState<Model | null>(null);
@@ -30,8 +33,8 @@ export function ModelsPage() {
   const [trainings, setTrainings] = useState<ModelTraining[]>([]);
   const [trLoading, setTrLoading] = useState(false);
   const [f, setF] = useState({ name: "", task_type: "classification", description: "" });
-  const reload = () => listModels().then(setItems);
-  useEffect(() => { reload().finally(() => setLoading(false)); }, []);
+  const reload = () => listModelsPaged({ page, page_size: pageSize }).then(res => { setItems(res.items); setTotal(res.total); });
+  useEffect(() => { reload().finally(() => setLoading(false)); }, [page, pageSize]);
 
   const openDetail = (m: Model) => {
     setDetail(m); setTrainings([]); setTrLoading(true);
@@ -102,6 +105,7 @@ export function ModelsPage() {
           </tr>
         ))}
       </TableShell>
+      <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={s => { setPageSize(s); setPage(1); }} />
 
       <ConfirmDialog
         open={del !== null}

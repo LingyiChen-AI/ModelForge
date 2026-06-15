@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Rocket, Square, Code2, Copy, Check, Play, Trash2 } from "lucide-react";
-import { listDeployments, createDeployment, stopDeployment, startDeployment, deleteDeployment, listModelVersions, type Deployment, type ModelVersion } from "../api/client";
-import { Button, ConfirmDialog, Drawer, EmptyState, Field, Mono, PageHeader, Select, StatusBadge, TableShell, Creator, CreatedAt, Badge } from "../ui";
+import { listDeploymentsPaged, createDeployment, stopDeployment, startDeployment, deleteDeployment, listModelVersions, type Deployment, type ModelVersion } from "../api/client";
+import { Button, ConfirmDialog, Drawer, EmptyState, Field, Mono, PageHeader, Pagination, Select, StatusBadge, TableShell, Creator, CreatedAt, Badge } from "../ui";
 import { toastError } from "../toast";
 import { buildApiDoc, type ApiDoc } from "../apiDocs";
 import { useAuth } from "../context/AuthContext";
@@ -31,6 +31,9 @@ export function DeployPage() {
   const { can } = useAuth();
   const [items, setItems] = useState<Deployment[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
   const [models, setModels] = useState<ModelVersion[]>([]);
   const [open, setOpen] = useState(false);
   const [mvId, setMvId] = useState("");
@@ -39,9 +42,9 @@ export function DeployPage() {
   const [del, setDel] = useState<Deployment | null>(null);
   const [delBusy, setDelBusy] = useState(false);
   const [apiDoc, setApiDoc] = useState<ApiDoc | null>(null);
-  const reload = () => listDeployments().then(setItems);
+  const reload = () => listDeploymentsPaged({ page, page_size: pageSize }).then(res => { setItems(res.items); setTotal(res.total); });
   useEffect(() => { listModelVersions().then(setModels); }, []);
-  useEffect(() => { reload().finally(() => setLoading(false)); const t = setInterval(reload, 3000); return () => clearInterval(t); }, []);
+  useEffect(() => { reload().finally(() => setLoading(false)); const t = setInterval(reload, 3000); return () => clearInterval(t); }, [page, pageSize]);
 
   const openDrawer = () => { setMvId(""); setBusy(false); setOpen(true); };
   const submit = () => {
@@ -119,6 +122,7 @@ export function DeployPage() {
           );
         })}
       </TableShell>
+      <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={s => { setPageSize(s); setPage(1); }} />
 
       <Drawer
         open={open}

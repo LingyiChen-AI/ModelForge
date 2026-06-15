@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Database, Plus, ChevronRight, Download } from "lucide-react";
-import { listDatasets, createDataset, downloadTemplateByType, type Dataset, type TemplateFormat } from "../api/client";
-import { Button, Drawer, EmptyState, Field, Input, Select, Badge, PageHeader, TableShell, Creator, CreatedAt } from "../ui";
+import { listDatasetsPaged, createDataset, downloadTemplateByType, type Dataset, type TemplateFormat } from "../api/client";
+import { Button, Drawer, EmptyState, Field, Input, Select, Badge, PageHeader, Pagination, TableShell, Creator, CreatedAt } from "../ui";
 import { toastError } from "../toast";
 import { useAuth } from "../context/AuthContext";
 import { navigate } from "../router";
@@ -19,13 +19,16 @@ export function DatasetsPage() {
   const { can } = useAuth();
   const [items, setItems] = useState<Dataset[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState("");
   const [kind, setKind] = useState("train");
   const [taskType, setTaskType] = useState("classification");
-  const reload = () => listDatasets().then(setItems);
-  useEffect(() => { reload().finally(() => setLoading(false)); }, []);
+  const reload = () => listDatasetsPaged({ page, page_size: pageSize }).then(res => { setItems(res.items); setTotal(res.total); });
+  useEffect(() => { reload().finally(() => setLoading(false)); }, [page, pageSize]);
 
   const openDrawer = () => { setName(""); setKind("train"); setTaskType("classification"); setBusy(false); setOpen(true); };
   const create = () => {
@@ -65,6 +68,7 @@ export function DatasetsPage() {
           </tr>
         ))}
       </TableShell>
+      <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={s => { setPageSize(s); setPage(1); }} />
 
       <Drawer
         open={open}

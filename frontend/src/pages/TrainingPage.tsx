@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Cpu, Play, LineChart, Trash2 } from "lucide-react";
-import { listJobs, createJob, deleteJob, listDatasetTree, listModels, getConfig, type TrainingJob, type DatasetNode, type Model } from "../api/client";
-import { Button, CascadeSelect, ConfirmDialog, Drawer, EmptyState, Field, Input, Mono, PageHeader, Select, StatusBadge, TableShell, Creator, CreatedAt } from "../ui";
+import { listJobsPaged, createJob, deleteJob, listDatasetTree, listModels, getConfig, type TrainingJob, type DatasetNode, type Model } from "../api/client";
+import { Button, CascadeSelect, ConfirmDialog, Drawer, EmptyState, Field, Input, Mono, PageHeader, Pagination, Select, StatusBadge, TableShell, Creator, CreatedAt } from "../ui";
 import { MetricChips } from "../components/MetricChips";
 import { ParamChips } from "../components/ParamChips";
 import { toastError } from "../toast";
@@ -56,6 +56,9 @@ export function TrainingPage() {
   const { can } = useAuth();
   const [jobs, setJobs] = useState<TrainingJob[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
   const [tree, setTree] = useState<DatasetNode[]>([]);
   const [evalTree, setEvalTree] = useState<DatasetNode[]>([]);
   const [models, setModels] = useState<Model[]>([]);
@@ -69,7 +72,7 @@ export function TrainingPage() {
   const [dvIds, setDvIds] = useState<string[]>([]);     // train set versions (merged)
   const [evalDvIds, setEvalDvIds] = useState<string[]>([]);  // eval set versions (merged)
   const [hp, setHp] = useState<Hp>(defaultHp(""));
-  const reload = () => listJobs().then(setJobs);
+  const reload = () => listJobsPaged({ page, page_size: pageSize }).then(res => { setJobs(res.items); setTotal(res.total); });
   const runUrl = (runId: string) => `${mlflowUrl}/#/experiments/0/runs/${runId}`;
   useEffect(() => {
     listDatasetTree("train").then(setTree);
@@ -77,7 +80,7 @@ export function TrainingPage() {
     listModels().then(setModels);
     getConfig().then(c => setMlflowUrl(c.mlflow_url)).catch(() => {});
   }, []);
-  useEffect(() => { reload().finally(() => setLoading(false)); const t = setInterval(reload, 3000); return () => clearInterval(t); }, []);
+  useEffect(() => { reload().finally(() => setLoading(false)); const t = setInterval(reload, 3000); return () => clearInterval(t); }, [page, pageSize]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -190,6 +193,7 @@ export function TrainingPage() {
           </tr>
         ))}
       </TableShell>
+      <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={s => { setPageSize(s); setPage(1); }} />
 
       <ConfirmDialog
         open={del !== null}

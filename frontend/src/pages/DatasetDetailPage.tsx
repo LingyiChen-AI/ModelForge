@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ArrowLeft, Upload, FileSpreadsheet, Layers, Download } from "lucide-react";
-import { listVersions, listDatasets, uploadVersion, downloadTemplate, downloadVersion, type Dataset, type DatasetVersion, type TemplateFormat } from "../api/client";
-import { Button, Drawer, EmptyState, Field, Input, Mono, PageHeader, TableShell, Creator, CreatedAt } from "../ui";
+import { listVersionsPaged, listDatasets, uploadVersion, downloadTemplate, downloadVersion, type Dataset, type DatasetVersion, type TemplateFormat } from "../api/client";
+import { Button, Drawer, EmptyState, Field, Input, Mono, PageHeader, Pagination, TableShell, Creator, CreatedAt } from "../ui";
 import { toastError } from "../toast";
 import { useAuth } from "../context/AuthContext";
 import { navigate } from "../router";
@@ -27,15 +27,18 @@ export function DatasetDetailPage({ id }: { id: number }) {
   const [versions, setVersions] = useState<DatasetVersion[]>([]);
   const [ds, setDs] = useState<Dataset | null>(null);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
   const [open, setOpen] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const reload = () => listVersions(id).then(setVersions);
+  const reload = () => listVersionsPaged(id, { page, page_size: pageSize }).then(res => { setVersions(res.items); setTotal(res.total); });
   useEffect(() => {
     setLoading(true); reload().finally(() => setLoading(false));
     listDatasets().then(list => setDs(list.find(d => d.id === id) ?? null)).catch(() => {});
-  }, [id]);
+  }, [id, page, pageSize]);
 
   const openDrawer = () => { setFile(null); setNote(""); setOpen(true); };
   const upload = async () => {
@@ -80,6 +83,7 @@ export function DatasetDetailPage({ id }: { id: number }) {
           </tr>
         ))}
       </TableShell>
+      <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={s => { setPageSize(s); setPage(1); }} />
 
       <Drawer
         open={open}

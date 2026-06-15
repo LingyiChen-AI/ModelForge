@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ShieldCheck, Plus, Trash2, Lock, Check, Pencil } from "lucide-react";
-import { listRoles, createRole, updateRole, deleteRole, listPermissions, type Role, type Permission } from "../api/client";
-import { Badge, Button, Drawer, EmptyState, Field, Input, Select, PageHeader, TableShell, CreatedAt, cx } from "../ui";
+import { listRolesPaged, createRole, updateRole, deleteRole, listPermissions, type Role, type Permission } from "../api/client";
+import { Badge, Button, Drawer, EmptyState, Field, Input, Select, PageHeader, Pagination, TableShell, CreatedAt, cx } from "../ui";
 import { toastError } from "../toast";
 
 export function RolesPage() {
@@ -9,14 +9,17 @@ export function RolesPage() {
   const [perms, setPerms] = useState<Permission[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
   const [busy, setBusy] = useState(false);
   const [delId, setDelId] = useState<number | null>(null);
   const [editId, setEditId] = useState<number | null>(null);   // null = create mode
   const [name, setName] = useState("");
   const [scope, setScope] = useState("own");
   const [sel, setSel] = useState<string[]>([]);
-  const reload = () => Promise.all([listRoles().then(setRoles), listPermissions().then(setPerms)]);
-  useEffect(() => { reload().finally(() => setLoading(false)); }, []);
+  const reload = () => Promise.all([listRolesPaged({ page, page_size: pageSize }).then(res => { setRoles(res.items); setTotal(res.total); }), listPermissions().then(setPerms)]);
+  useEffect(() => { reload().finally(() => setLoading(false)); }, [page, pageSize]);
 
   const toggle = (c: string) => setSel(s => s.includes(c) ? s.filter(x => x !== c) : [...s, c]);
   const selectable = perms.filter(p => p.code !== "*");
@@ -89,6 +92,7 @@ export function RolesPage() {
           </tr>
         ))}
       </TableShell>
+      <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={s => { setPageSize(s); setPage(1); }} />
 
       <Drawer
         open={open}

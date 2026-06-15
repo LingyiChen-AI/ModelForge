@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Users, UserPlus, KeyRound, Plus } from "lucide-react";
-import { listUsers, createUser, updateUser, resetPassword, listRoles, type AdminUser, type Role } from "../api/client";
-import { Badge, Button, Drawer, EmptyState, Field, Input, Mono, PageHeader, PromptDialog, Select, TableShell, CreatedAt } from "../ui";
+import { listUsersPaged, createUser, updateUser, resetPassword, listRoles, type AdminUser, type Role } from "../api/client";
+import { Badge, Button, Drawer, EmptyState, Field, Input, Mono, PageHeader, Pagination, PromptDialog, Select, TableShell, CreatedAt } from "../ui";
 import { toastError, toastSuccess } from "../toast";
 
 export function UsersPage() {
@@ -9,13 +9,16 @@ export function UsersPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
   const [busy, setBusy] = useState(false);
   const [acting, setActing] = useState<number | null>(null);
   const [pwUser, setPwUser] = useState<AdminUser | null>(null);
   const [pwBusy, setPwBusy] = useState(false);
   const [f, setF] = useState({ name: "", email: "", password: "", role_id: "" });
-  const reload = () => Promise.all([listUsers().then(setUsers), listRoles().then(setRoles)]);
-  useEffect(() => { reload().finally(() => setLoading(false)); }, []);
+  const reload = () => Promise.all([listUsersPaged({ page, page_size: pageSize }).then(res => { setUsers(res.items); setTotal(res.total); }), listRoles().then(setRoles)]);
+  useEffect(() => { reload().finally(() => setLoading(false)); }, [page, pageSize]);
 
   const openDrawer = () => { setF({ name: "", email: "", password: "", role_id: "" }); setBusy(false); setOpen(true); };
   const create = () => {
@@ -75,6 +78,7 @@ export function UsersPage() {
           </tr>
         ))}
       </TableShell>
+      <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={s => { setPageSize(s); setPage(1); }} />
 
       <Drawer
         open={open}

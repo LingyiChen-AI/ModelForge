@@ -28,10 +28,14 @@ export type Dataset = { id: number; name: string; kind: string; task_type: strin
 export type DatasetVersion = { id: number; version_no: number; row_count: number; checksum: string; note: string; created_at: string; created_by_name: string | null };
 
 export const listDatasets = () => api.get<Dataset[]>("/datasets").then(r => r.data);
+export const listDatasetsPaged = (p: { page: number; page_size: number }) =>
+  getPaginated<Dataset>("/datasets", p);
 export const createDataset = (b: { name: string; kind: string; task_type: string }) =>
   api.post<Dataset>("/datasets", b).then(r => r.data);
 export const listVersions = (id: number) =>
   api.get<DatasetVersion[]>(`/datasets/${id}/versions`).then(r => r.data);
+export const listVersionsPaged = (id: number, p: { page: number; page_size: number }) =>
+  getPaginated<DatasetVersion>(`/datasets/${id}/versions`, p);
 
 // Flattened version picker options for a dataset kind (train / eval).
 // There is no flat "all versions" endpoint, so we fan out per dataset.
@@ -108,12 +112,16 @@ export type Model = {
   created_at: string; created_by_name: string | null;
 };
 export const listModels = () => api.get<Model[]>("/models").then(r => r.data);
+export const listModelsPaged = (p: { page: number; page_size: number }) =>
+  getPaginated<Model>("/models", p);
 export const createModel = (b: { name: string; task_type: string; description?: string }) =>
   api.post<Model>("/models", b).then(r => r.data);
 export type ModelTraining = { id: number; name: string; status: string; created_at: string; created_by_name: string | null; train_count: number; eval_count: number; train_datasets: string[]; eval_datasets: string[]; version_label: string | null; metrics: Record<string, number>; hyperparams: Record<string, any> };
 export const listModelTrainings = (modelId: number) => api.get<ModelTraining[]>(`/models/${modelId}/trainings`).then(r => r.data);
 export type ModelVersion = { id: number; name: string; mlflow_version: string; task_type: string; train_metrics: Record<string, number>; stage: string; created_at: string; created_by_name: string | null };
 export const listJobs = () => api.get<TrainingJob[]>("/training-jobs").then(r => r.data);
+export const listJobsPaged = (p: { page: number; page_size: number }) =>
+  getPaginated<TrainingJob>("/training-jobs", p);
 export const createJob = (b: any) => api.post<TrainingJob>("/training-jobs", b).then(r => r.data);
 export const deleteJob = (id: number, cascade: boolean) => api.delete(`/training-jobs/${id}`, { params: { cascade } }).then(r => r.data);
 export const deleteModel = (id: number, cascade: boolean) => api.delete(`/models/${id}`, { params: { cascade } }).then(r => r.data);
@@ -124,12 +132,16 @@ export const setModelStage = (id: number, stage: string) =>
 export type EvalRun = { id: number; model_version_id: number; model_name: string | null; model_version_label: string | null; dataset_version_id: number; dataset_name: string | null; dataset_version_no: number | null; status: string; progress: number; results: Record<string, number>; error: string | null; created_at: string; created_by_name: string | null };
 export const listEvalRuns = (datasetVersionId?: number) =>
   api.get<EvalRun[]>("/eval-runs", { params: datasetVersionId ? { dataset_version_id: datasetVersionId } : {} }).then(r => r.data);
+export const listEvalRunsPaged = (p: { page: number; page_size: number; dataset_version_id?: number }) =>
+  getPaginated<EvalRun>("/eval-runs", p);
 export const createEvalRun = (b: { model_version_id: number; dataset_version_id: number }) =>
   api.post<EvalRun>("/eval-runs", b).then(r => r.data);
 export const deleteEvalRun = (id: number) => api.delete(`/eval-runs/${id}`).then(r => r.data);
 
 export type Deployment = { id: number; model_version_id: number; status: string; endpoint: string | null; error: string | null; created_at: string; created_by_name: string | null };
 export const listDeployments = () => api.get<Deployment[]>("/deployments").then(r => r.data);
+export const listDeploymentsPaged = (p: { page: number; page_size: number }) =>
+  getPaginated<Deployment>("/deployments", p);
 export const createDeployment = (model_version_id: number) =>
   api.post<Deployment>("/deployments", { model_version_id }).then(r => r.data);
 export const stopDeployment = (id: number) => api.post<Deployment>(`/deployments/${id}/stop`, {}).then(r => r.data);
@@ -140,10 +152,14 @@ export type AdminUser = { id: number; name: string; email: string; role_id: numb
 export type Role = { id: number; name: string; description: string; data_scope: string; is_system: boolean; is_builtin: boolean; permissions: string[]; created_at: string };
 export type Permission = { code: string; description: string };
 export const listUsers = () => api.get<AdminUser[]>("/users").then(r => r.data);
+export const listUsersPaged = (p: { page: number; page_size: number }) =>
+  getPaginated<AdminUser>("/users", p);
 export const createUser = (b: { name: string; email: string; password: string; role_id: number | null }) => api.post<AdminUser>("/users", b).then(r => r.data);
 export const updateUser = (id: number, b: { role_id?: number | null; is_active?: boolean }) => api.patch<AdminUser>(`/users/${id}`, b).then(r => r.data);
 export const resetPassword = (id: number, password: string) => api.post(`/users/${id}/reset-password`, { password }).then(r => r.data);
 export const listRoles = () => api.get<Role[]>("/roles").then(r => r.data);
+export const listRolesPaged = (p: { page: number; page_size: number }) =>
+  getPaginated<Role>("/roles/roles", p);
 export const createRole = (b: { name: string; description: string; data_scope: string; permission_codes: string[] }) => api.post<Role>("/roles", b).then(r => r.data);
 export const updateRole = (id: number, b: { name?: string; permission_codes?: string[]; data_scope?: string; description?: string }) => api.patch<Role>(`/roles/${id}`, b).then(r => r.data);
 export const deleteRole = (id: number) => api.delete(`/roles/${id}`).then(r => r.data);
@@ -151,6 +167,8 @@ export const listPermissions = () => api.get<Permission[]>("/permissions").then(
 
 export type ApiKey = { id: number; name: string; key_prefix: string; plaintext: string | null; scopes: string[]; created_by_name: string | null; last_used_at: string | null; revoked_at: string | null; created_at: string };
 export const listApiKeys = () => api.get<ApiKey[]>("/api-keys").then(r => r.data);
+export const listApiKeysPaged = (p: { page: number; page_size: number }) =>
+  getPaginated<ApiKey>("/api-keys", p);
 export const createApiKey = (b: { name: string; scopes: string[] }) => api.post<ApiKey & { plaintext: string }>("/api-keys", b).then(r => r.data);
 export const revokeApiKey = (id: number) => api.delete(`/api-keys/${id}`).then(r => r.data);
 

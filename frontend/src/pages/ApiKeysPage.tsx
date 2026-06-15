@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { KeyRound, Plus, Copy, Check, Ban } from "lucide-react";
-import { listApiKeys, createApiKey, revokeApiKey, type ApiKey } from "../api/client";
-import { Badge, Button, ConfirmDialog, Drawer, EmptyState, Field, Input, Mono, PageHeader, TableShell, Creator, CreatedAt } from "../ui";
+import { listApiKeysPaged, createApiKey, revokeApiKey, type ApiKey } from "../api/client";
+import { Badge, Button, ConfirmDialog, Drawer, EmptyState, Field, Input, Mono, PageHeader, Pagination, TableShell, Creator, CreatedAt } from "../ui";
 import { toastError, toastSuccess } from "../toast";
 
 const SCOPES = [
@@ -12,6 +12,9 @@ const SCOPES = [
 export function ApiKeysPage() {
   const [keys, setKeys] = useState<ApiKey[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [name, setName] = useState("");
@@ -27,8 +30,8 @@ export function ApiKeysPage() {
     setTimeout(() => setCopiedId(c => (c === k.id ? null : c)), 1500);
     toastSuccess(k.plaintext ? "已复制完整 Key" : "该 Key 创建较早无明文,仅复制了前缀");
   };
-  const reload = () => listApiKeys().then(setKeys);
-  useEffect(() => { reload().finally(() => setLoading(false)); }, []);
+  const reload = () => listApiKeysPaged({ page, page_size: pageSize }).then(res => { setKeys(res.items); setTotal(res.total); });
+  useEffect(() => { reload().finally(() => setLoading(false)); }, [page, pageSize]);
 
   const openDrawer = () => { setName(""); setScopes([]); setBusy(false); setOpen(true); };
   const toggle = (c: string) => setScopes(s => s.includes(c) ? s.filter(x => x !== c) : [...s, c]);
@@ -71,6 +74,7 @@ export function ApiKeysPage() {
             </tr>
           ))}
       </TableShell>
+      <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={s => { setPageSize(s); setPage(1); }} />
 
       <Drawer open={open} onClose={() => setOpen(false)} title="新建 API Key"
         subtitle="选择该 Key 可用于哪些接口。创建后请立即复制保存明文,之后无法再查看。"

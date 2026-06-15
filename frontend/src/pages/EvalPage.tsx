@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { BarChart3, FlaskConical, Trash2 } from "lucide-react";
-import { listEvalRuns, createEvalRun, deleteEvalRun, listModelVersions, listVersionOptions, type EvalRun, type ModelVersion, type VersionOption } from "../api/client";
-import { Button, ConfirmDialog, Drawer, EmptyState, Field, Mono, PageHeader, Select, StatusBadge, TableShell, Creator, CreatedAt } from "../ui";
+import { listEvalRunsPaged, createEvalRun, deleteEvalRun, listModelVersions, listVersionOptions, type EvalRun, type ModelVersion, type VersionOption } from "../api/client";
+import { Button, ConfirmDialog, Drawer, EmptyState, Field, Mono, PageHeader, Pagination, Select, StatusBadge, TableShell, Creator, CreatedAt } from "../ui";
 import { toastError } from "../toast";
 import { MetricChips as Metrics } from "../components/MetricChips";
 import { useAuth } from "../context/AuthContext";
@@ -14,6 +14,9 @@ export function EvalPage() {
   const { can } = useAuth();
   const [runs, setRuns] = useState<EvalRun[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
   const [models, setModels] = useState<ModelVersion[]>([]);
   const [evalVersions, setEvalVersions] = useState<VersionOption[]>([]);
   const [filterDv, setFilterDv] = useState("");   // list / leaderboard filter
@@ -23,9 +26,9 @@ export function EvalPage() {
   const [formDv, setFormDv] = useState("");        // drawer: test set version
   const [del, setDel] = useState<EvalRun | null>(null);
   const [delBusy, setDelBusy] = useState(false);
-  const reload = () => listEvalRuns(filterDv ? Number(filterDv) : undefined).then(setRuns);
+  const reload = () => listEvalRunsPaged({ page, page_size: pageSize, ...(filterDv ? { dataset_version_id: Number(filterDv) } : {}) }).then(res => { setRuns(res.items); setTotal(res.total); });
   useEffect(() => { listModelVersions().then(setModels); listVersionOptions("test").then(setEvalVersions); }, []);
-  useEffect(() => { reload().finally(() => setLoading(false)); const t = setInterval(reload, 3000); return () => clearInterval(t); }, [filterDv]);
+  useEffect(() => { reload().finally(() => setLoading(false)); const t = setInterval(reload, 3000); return () => clearInterval(t); }, [page, pageSize, filterDv]);
 
   const openDrawer = () => { setMvId(""); setFormDv(""); setBusy(false); setOpen(true); };
   // test set is linked to the chosen model version's task type
@@ -56,7 +59,7 @@ export function EvalPage() {
 
       <div className="mb-4 flex items-center gap-2.5">
         <span className="text-[13px] text-slate-500">筛选</span>
-        <Select className="h-9 w-60" value={filterDv} onChange={e => setFilterDv(e.target.value)}>
+        <Select className="h-9 w-60" value={filterDv} onChange={e => { setFilterDv(e.target.value); setPage(1); }}>
           <option value="">全部测试集版本</option>
           {evalVersions.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
         </Select>
@@ -102,6 +105,7 @@ export function EvalPage() {
           </tr>
         ))}
       </TableShell>
+      <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={s => { setPageSize(s); setPage(1); }} />
 
       <Drawer
         open={open}
