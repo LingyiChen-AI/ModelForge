@@ -102,7 +102,7 @@ def chat(base_url: str, api_key: str, model_id: str,
 
 ### 掩码
 
-Pydantic 输出 schema 的 `api_key` 字段返回 `mask(key)`:长度 ≤ 4 全星号,否则 `key[:3] + "…" + key[-4:]`(如 `sk-…cdef`)。完整 key 不进任何响应 schema。
+输出 schema(`ProviderOut`)**不含 `api_key` 字段**,改暴露 `masked_key`(读模型上的 `masked_key` 属性 = `mask_key(api_key)`):长度 ≤ 4 → 单个省略号 `…`(不泄漏任何字符),否则 `key[:3] + "…" + key[-4:]`(如 `sk-…cdef`)。完整 key 不进任何响应 schema。
 
 ### 测试端点行为
 
