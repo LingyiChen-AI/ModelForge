@@ -2,6 +2,7 @@
 name = "modelforge-common"
 version = "0.1.0"
 requires-python = ">=3.10"
+dependencies = ["httpx>=0.27"]
 
 [build-system]
 requires = ["setuptools>=68"]
