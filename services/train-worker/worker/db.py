@@ -138,3 +138,69 @@ def load_eval_run(engine: Engine, eval_run_id: int) -> dict:
             "JOIN dataset_versions v ON v.id = r.dataset_version_id "
             "WHERE r.id = :id"), {"id": eval_run_id}).mappings().one()
         return dict(row)
+
+
+def set_prompt_eval_status(engine: Engine, run_id: int, status: JobStatus,
+                           error: str | None = None) -> None:
+    sets = ["status = :s"]
+    params = {"s": status.value, "id": run_id}
+    if error is not None:
+        sets.append("error = :e")
+        params["e"] = error
+    with engine.begin() as c:
+        c.execute(text(f"UPDATE prompt_eval_runs SET {', '.join(sets)} WHERE id = :id"), params)
+
+
+def set_prompt_eval_progress(engine: Engine, run_id: int, progress: float) -> None:
+    with engine.begin() as c:
+        c.execute(text("UPDATE prompt_eval_runs SET progress = :p WHERE id = :id"),
+                  {"p": max(0.0, min(1.0, float(progress))), "id": run_id})
+
+
+def load_prompt_eval_run(engine: Engine, run_id: int) -> dict:
+    with engine.connect() as c:
+        run = c.execute(text(
+            "SELECT id, eval_type, dataset_version_ids FROM prompt_eval_runs WHERE id = :id"),
+            {"id": run_id}).mappings().one()
+        arms = c.execute(text(
+            "SELECT a.id, a.arm_index, a.prompt_version_id, a.model_id, "
+            "pv.system_prompt, pv.user_prompt, lp.base_url, lp.api_key, lm.model_id AS model_str "
+            "FROM prompt_eval_arms a "
+            "JOIN prompt_versions pv ON pv.id = a.prompt_version_id "
+            "JOIN llm_models lm ON lm.id = a.model_id "
+            "JOIN llm_providers lp ON lp.id = lm.provider_id "
+            "WHERE a.run_id = :id ORDER BY a.arm_index"), {"id": run_id}).mappings().all()
+        dv_ids = _as_json(run["dataset_version_ids"]) or []
+        datasets = []
+        if dv_ids:
+            rows = c.execute(text("SELECT id, storage_uri FROM dataset_versions WHERE id IN :ids")
+                             .bindparams(bindparam("ids", expanding=True)),
+                             {"ids": dv_ids}).mappings().all()
+            datasets = [(r["id"], r["storage_uri"]) for r in rows]
+    return {"id": run["id"], "eval_type": run["eval_type"],
+            "arms": [dict(a) for a in arms], "datasets": datasets}
+
+
+def insert_eval_item(engine: Engine, run_id: int, item_index: int,
+                     dataset_version_id: int, row_index: int, inputs: dict) -> int:
+    with engine.begin() as c:
+        return c.execute(text(
+            "INSERT INTO prompt_eval_items (run_id, item_index, dataset_version_id, row_index, inputs) "
+            "VALUES (:r, :i, :d, :ri, :inp) RETURNING id"),
+            {"r": run_id, "i": item_index, "d": dataset_version_id, "ri": row_index,
+             "inp": json.dumps(inputs, ensure_ascii=False)}).scalar_one()
+
+
+def insert_eval_output(engine: Engine, item_id: int, arm_id: int) -> int:
+    with engine.begin() as c:
+        return c.execute(text(
+            "INSERT INTO prompt_eval_outputs (item_id, arm_id, status) VALUES (:it, :a, 'pending') "
+            "RETURNING id"), {"it": item_id, "a": arm_id}).scalar_one()
+
+
+def set_output_result(engine: Engine, output_id: int, *, status: str,
+                      output_text: str = "", error: str | None = None, latency_ms: int = 0) -> None:
+    with engine.begin() as c:
+        c.execute(text("UPDATE prompt_eval_outputs SET status = :s, output_text = :t, "
+                       "error = :e, latency_ms = :l WHERE id = :id"),
+                  {"s": status, "t": output_text, "e": error, "l": latency_ms, "id": output_id})
