@@ -2,7 +2,7 @@ import io, json
 import pandas as pd
 from sqlalchemy import select, func
 from sqlalchemy.orm import Session
-from modelforge_common.enums import TaskType
+from modelforge_common.enums import TaskType, DatasetKind
 from app.models.dataset import Dataset, DatasetVersion
 from app.storage import SnapshotStorage
 
@@ -52,6 +52,13 @@ def validate_rows(df: pd.DataFrame, task_type: TaskType) -> None:
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(f"missing columns for {task_type.value}: {missing}")
+    if len(df) == 0:
+        raise ValueError("dataset is empty")
+
+
+def validate_prompt_rows(df: pd.DataFrame) -> None:
+    if df.shape[1] == 0:
+        raise ValueError("Prompt 测试集至少需要一列参数")
     if len(df) == 0:
         raise ValueError("dataset is empty")
 
@@ -131,8 +138,11 @@ def serialize_template(task_type: TaskType, fmt: str) -> tuple[bytes, str, str]:
 def create_version(db: Session, store: SnapshotStorage, dataset: Dataset,
                    df: pd.DataFrame, note: str = "",
                    created_by: int | None = None) -> DatasetVersion:
-    validate_rows(df, TaskType(dataset.task_type))
-    df = normalize_list_columns(df, TaskType(dataset.task_type))
+    if dataset.kind == DatasetKind.PROMPT.value:
+        validate_prompt_rows(df)
+    else:
+        validate_rows(df, TaskType(dataset.task_type))
+        df = normalize_list_columns(df, TaskType(dataset.task_type))
     next_no = (db.execute(
         select(func.coalesce(func.max(DatasetVersion.version_no), 0))
         .where(DatasetVersion.dataset_id == dataset.id)).scalar()) + 1

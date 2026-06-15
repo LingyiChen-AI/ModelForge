@@ -38,3 +38,28 @@ def test_bootstrap_has_prompt_perms(session_factory):
     assert "prompt:write" in {p.code for p in member.permissions}
     assert "prompt:read" in {p.code for p in viewer.permissions}
     assert "prompt:write" not in {p.code for p in viewer.permissions}
+
+
+class _FakeStore:
+    def write_snapshot(self, dataset_id, version_no, df):
+        return (f"mem://{dataset_id}/{version_no}", "checksum", len(df))
+
+
+def test_validate_prompt_rows_rejects_empty():
+    import pandas as pd, pytest
+    from app.services.dataset_service import validate_prompt_rows
+    with pytest.raises(ValueError):
+        validate_prompt_rows(pd.DataFrame())                 # 0 列
+    with pytest.raises(ValueError):
+        validate_prompt_rows(pd.DataFrame(columns=["a"]))    # 0 行
+
+
+def test_create_prompt_version_skips_task_validation(session_factory):
+    import pandas as pd
+    from app.models.dataset import Dataset
+    from app.services.dataset_service import create_version
+    db = session_factory()
+    ds = Dataset(name="pset", kind="prompt", task_type="prompt"); db.add(ds); db.commit()
+    df = pd.DataFrame([{"city": "BJ", "name": "x"}])
+    v = create_version(db, _FakeStore(), ds, df, created_by=None)
+    assert v.stats["columns"] == ["city", "name"] and v.version_no == 1
