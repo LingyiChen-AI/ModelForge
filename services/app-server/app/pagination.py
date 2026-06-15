@@ -24,3 +24,14 @@ def paginate(db: Session, stmt, response: Response, page: int | None, page_size:
     page = max(1, page)
     page_size = max(1, min(page_size, MAX_PAGE_SIZE))
     return db.execute(stmt.limit(page_size).offset((page - 1) * page_size)).scalars().all()
+
+
+def paginate_list(rows: list, response: Response, page: int | None, page_size: int = 20) -> list:
+    """Same opt-in pagination for an already-computed list (e.g. an aggregate)."""
+    response.headers["X-Total-Count"] = str(len(rows))
+    if page is None:
+        return rows
+    page = max(1, page)
+    page_size = max(1, min(page_size, MAX_PAGE_SIZE))
+    start = (page - 1) * page_size
+    return rows[start:start + page_size]

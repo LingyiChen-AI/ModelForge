@@ -57,8 +57,11 @@ def list_badcases(response: Response, page: int | None = Query(None, ge=1),
 
 
 @router.get("/badcases/summary", response_model=list[BadcaseSummaryOut])
-def badcase_summary(_: User = Depends(require("badcase:read")), db: Session = Depends(get_db)):
-    return badcase_service.summary(db)
+def badcase_summary(response: Response, page: int | None = Query(None, ge=1),
+                    page_size: int = Query(20, ge=1, le=200),
+                    _: User = Depends(require("badcase:read")), db: Session = Depends(get_db)):
+    from app.pagination import paginate_list
+    return paginate_list(badcase_service.summary(db), response, page, page_size)
 
 
 @router.get("/badcases/stats")

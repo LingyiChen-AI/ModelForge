@@ -159,7 +159,7 @@ export const updateUser = (id: number, b: { role_id?: number | null; is_active?:
 export const resetPassword = (id: number, password: string) => api.post(`/users/${id}/reset-password`, { password }).then(r => r.data);
 export const listRoles = () => api.get<Role[]>("/roles").then(r => r.data);
 export const listRolesPaged = (p: { page: number; page_size: number }) =>
-  getPaginated<Role>("/roles/roles", p);
+  getPaginated<Role>("/roles", p);
 export const createRole = (b: { name: string; description: string; data_scope: string; permission_codes: string[] }) => api.post<Role>("/roles", b).then(r => r.data);
 export const updateRole = (id: number, b: { name?: string; permission_codes?: string[]; data_scope?: string; description?: string }) => api.patch<Role>(`/roles/${id}`, b).then(r => r.data);
 export const deleteRole = (id: number) => api.delete(`/roles/${id}`).then(r => r.data);
@@ -222,3 +222,5 @@ export type BadcaseSummary = {
 };
 export const listBadcaseSummary = () =>
   api.get<BadcaseSummary[]>("/badcases/summary").then(r => r.data);
+export const listBadcaseSummaryPaged = (p: { page: number; page_size: number }) =>
+  getPaginated<BadcaseSummary>("/badcases/summary", p);

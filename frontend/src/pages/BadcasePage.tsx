@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Bug, BookText, PencilLine } from "lucide-react";
-import { listBadcaseSummary, listBadcaseRules, type BadcaseSummary } from "../api/client";
-import { Badge, Button, EmptyState, PageHeader, TableShell } from "../ui";
+import { listBadcaseSummaryPaged, listBadcaseRules, type BadcaseSummary } from "../api/client";
+import { Badge, Button, EmptyState, PageHeader, Pagination, TableShell } from "../ui";
 import { toastError } from "../toast";
 import { navigate } from "../router";
 import { BadcaseRulesDrawer } from "./BadcaseRulesDrawer";
@@ -13,6 +13,9 @@ const TASK_LABEL: Record<string, string> = {
 export function BadcasePage() {
   const [rows, setRows] = useState<BadcaseSummary[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+  const [total, setTotal] = useState(0);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [rules, setRules] = useState<any[]>([]);
 
@@ -23,8 +26,10 @@ export function BadcasePage() {
 
   useEffect(() => {
     setLoading(true);
-    listBadcaseSummary().then(setRows).catch(() => toastError("加载失败")).finally(() => setLoading(false));
-  }, []);
+    listBadcaseSummaryPaged({ page, page_size: pageSize })
+      .then(res => { setRows(res.items); setTotal(res.total); })
+      .catch(() => toastError("加载失败")).finally(() => setLoading(false));
+  }, [page, pageSize]);
 
   return (
     <div>
@@ -77,6 +82,7 @@ export function BadcasePage() {
           ))
         )}
       </TableShell>
+      <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={s => { setPageSize(s); setPage(1); }} />
 
       <BadcaseRulesDrawer open={rulesOpen} onClose={() => setRulesOpen(false)} rules={rules} />
     </div>
