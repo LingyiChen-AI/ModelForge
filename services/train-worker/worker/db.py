@@ -204,3 +204,42 @@ def set_output_result(engine: Engine, output_id: int, *, status: str,
         c.execute(text("UPDATE prompt_eval_outputs SET status = :s, output_text = :t, "
                        "error = :e, latency_ms = :l WHERE id = :id"),
                   {"s": status, "t": output_text, "e": error, "l": latency_ms, "id": output_id})
+
+
+def load_ai_eval_context(engine: Engine, run_id: int, model_id: int) -> dict:
+    with engine.connect() as c:
+        run = c.execute(text("SELECT eval_type FROM prompt_eval_runs WHERE id = :id"),
+                        {"id": run_id}).mappings().one()
+        model = c.execute(text(
+            "SELECT lm.model_id AS model_str, lp.base_url, lp.api_key "
+            "FROM llm_models lm JOIN llm_providers lp ON lp.id = lm.provider_id "
+            "WHERE lm.id = :id"), {"id": model_id}).mappings().one()
+        arms = c.execute(text("SELECT id, arm_index FROM prompt_eval_arms "
+                              "WHERE run_id = :id ORDER BY arm_index"), {"id": run_id}).mappings().all()
+    return {"eval_type": run["eval_type"], "base_url": model["base_url"],
+            "api_key": model["api_key"], "model_str": model["model_str"],
+            "arms": [dict(a) for a in arms]}
+
+
+def pending_ai_items(engine: Engine, run_id: int) -> list[dict]:
+    with engine.connect() as c:
+        items = c.execute(text("SELECT id, inputs FROM prompt_eval_items "
+                               "WHERE run_id = :id AND ai_evaluated_at IS NULL ORDER BY id"),
+                          {"id": run_id}).mappings().all()
+        out = []
+        for it in items:
+            outs = c.execute(text("SELECT arm_id, output_text FROM prompt_eval_outputs WHERE item_id = :i"),
+                             {"i": it["id"]}).mappings().all()
+            out.append({"id": it["id"], "inputs": _as_json(it["inputs"]) or {},
+                        "outputs": [dict(o) for o in outs]})
+    return out
+
+
+def set_ai_verdict(engine: Engine, item_id: int, *, ai_winner_arm_id, ai_all_bad, ai_is_good,
+                   ai_model_id, ai_reasoning, evaluated_at) -> None:
+    with engine.begin() as c:
+        c.execute(text("UPDATE prompt_eval_items SET ai_winner_arm_id = :w, ai_all_bad = :ab, "
+                       "ai_is_good = :ig, ai_model_id = :m, ai_reasoning = :r, ai_evaluated_at = :at "
+                       "WHERE id = :id"),
+                  {"w": ai_winner_arm_id, "ab": ai_all_bad, "ig": ai_is_good, "m": ai_model_id,
+                   "r": ai_reasoning, "at": evaluated_at, "id": item_id})

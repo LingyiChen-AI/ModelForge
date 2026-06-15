@@ -4,9 +4,10 @@ from mlflow.tracking import MlflowClient
 import requests
 from worker.config import settings
 from worker.celery_app import celery_app
-from modelforge_common.task_names import TRAIN_TASK, EVAL_TASK, PROMPT_EVAL_TASK
+from modelforge_common.task_names import TRAIN_TASK, EVAL_TASK, PROMPT_EVAL_TASK, PROMPT_AI_EVAL_TASK
 from modelforge_common.enums import JobStatus
 from worker.prompt_eval import run_prompt_eval
+from worker.prompt_ai_eval import run_prompt_ai_eval
 from worker.db import (build_engine, set_job_status, set_job_progress, load_job,
                        set_eval_status, set_eval_progress, load_eval_run,
                        load_trained_badcases)
@@ -178,4 +179,11 @@ def prompt_eval_task(self, run_id: int):
         from modelforge_common.enums import JobStatus
         set_prompt_eval_status(engine, run_id, JobStatus.FAILED, error=str(e))
         raise
+    return {"run_id": run_id}
+
+
+@celery_app.task(name=PROMPT_AI_EVAL_TASK, bind=True)
+def prompt_ai_eval_task(self, run_id: int, model_id: int, judge_prompt: str):
+    engine = build_engine()
+    run_prompt_ai_eval(engine, run_id, model_id, judge_prompt)
     return {"run_id": run_id}
