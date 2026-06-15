@@ -6,6 +6,7 @@ from app.models.training import TrainingJob, ModelVersion, EvalRun, Deployment
 from app.models.api_key import ApiKey
 from app.models.badcase import Badcase
 from app.models.llm import LlmProvider, LlmModel
+from app.models.prompt import Prompt, PromptVersion
 
 __all__ = [
     "Base",
@@ -23,4 +24,6 @@ __all__ = [
     "Badcase",
     "LlmProvider",
     "LlmModel",
+    "Prompt",
+    "PromptVersion",
 ]
