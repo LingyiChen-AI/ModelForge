@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, Database, ChevronLeft, ChevronRight, UserRound, Clock } from "lucide-react";
+import { ArrowLeft, Check, Database, ChevronLeft, ChevronRight, UserRound, Clock, SkipForward } from "lucide-react";
 import {
   listBadcases, listBadcasesPaged, listBadcaseSummary, annotateBadcase, buildBadcaseDataset, listBadcaseLabels,
   type Badcase, type BadcaseSummary,
@@ -144,7 +144,7 @@ export function BadcaseAnnotateWorkbench({ modelVersionId }: { modelVersionId: n
       {loading ? (
         <div className="py-20 text-center text-[13px] text-slate-400">加载中…</div>
       ) : (
-        <div className="flex h-[72vh] overflow-hidden rounded-xl border border-slate-200 bg-white">
+        <div className="flex h-[calc(100vh-190px)] min-h-[480px] overflow-hidden rounded-xl border border-slate-200 bg-white">
           {/* ── left: case list ── */}
           <div className="flex w-[320px] shrink-0 flex-col border-r border-slate-200">
             <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-slate-200 p-2">
@@ -208,6 +208,10 @@ export function BadcaseAnnotateWorkbench({ modelVersionId }: { modelVersionId: n
                   )}
                 </div>
                 <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-100 px-5 py-3">
+                  <Button variant="subtle" disabled={busy || idxInList >= list.length - 1}
+                    onClick={() => list[idxInList + 1] && setSelectedId(list[idxInList + 1].id)}>
+                    <SkipForward size={15} /> 跳过
+                  </Button>
                   <Button variant="subtle" disabled={busy || !valid} onClick={() => save(false)}>保存</Button>
                   <Button variant="primary" disabled={busy || !valid} loading={busy} onClick={() => save(true)}>
                     <Check size={16} /> 保存并下一条

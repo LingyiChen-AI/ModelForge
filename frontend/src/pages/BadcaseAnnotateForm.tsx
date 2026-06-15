@@ -18,10 +18,10 @@ const PAIR_LABEL = (l: any) => (String(l) === "1" ? "相似" : String(l) === "0"
 // parsed (non-JSON) display of the reported model input, per task type
 function InputView({ b }: { b: Badcase }) {
   const i = b.input ?? {};
-  if (b.task_type === "classification") return <Panel><KV k="文本">{i.text}</KV></Panel>;
+  if (b.task_type === "classification") return <Panel><KV k="样本">{i.text}</KV></Panel>;
   if (b.task_type === "pair") return <Panel><KV k="句子 A">{i.text_a}</KV><KV k="句子 B">{i.text_b}</KV></Panel>;
   if (b.task_type === "ner")
-    return <Panel><KV k="文本">{(i.tokens ?? []).join("")}</KV></Panel>;
+    return <Panel><KV k="样本">{(i.tokens ?? []).join("")}</KV></Panel>;
   if (b.task_type === "embedding")
     return (
       <Panel>
