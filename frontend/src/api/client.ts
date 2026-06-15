@@ -261,3 +261,26 @@ export const addPromptVersion = (id: number, b: { system_prompt: string; user_pr
   api.post<PromptVersionRow>(`/prompts/${id}/versions`, b).then(r => r.data);
 export const validatePrompt = (b: { system_prompt: string; user_prompt: string }) =>
   api.post<{ params: string[]; errors: string[] }>("/prompts/validate", b).then(r => r.data);
+
+export type PromptEvalArmRow = { id: number; arm_index: number; prompt_version_id: number; model_id: number; label: string };
+export type PromptEval = {
+  id: number; name: string; eval_type: string; status: string; progress: number;
+  prompt_version_ids: number[]; model_ids: number[]; dataset_version_ids: number[];
+  compare_to_version_id: number | null; created_by_name: string | null; created_at: string;
+};
+export type PromptEvalDetail = PromptEval & { arms: PromptEvalArmRow[] };
+export type PromptEvalOutputRow = { id: number; arm_id: number; output_text: string; status: string; error: string | null; latency_ms: number };
+export type PromptEvalItem = { id: number; item_index: number; dataset_version_id: number; row_index: number; inputs: Record<string, any>; outputs: PromptEvalOutputRow[] };
+export type PromptEvalOptions = {
+  prompt_versions: { id: number; label: string }[];
+  models: { id: number; label: string }[];
+  prompt_datasets: { version_id: number; label: string }[];
+};
+export const listPromptEvalsPaged = (p: { page: number; page_size: number }) =>
+  getPaginated<PromptEval>("/prompt-evals", p);
+export const getPromptEvalOptions = () => api.get<PromptEvalOptions>("/prompt-evals/options").then(r => r.data);
+export const createPromptEval = (b: { eval_type: string; name: string; prompt_version_ids: number[]; model_ids: number[]; dataset_version_ids: number[] }) =>
+  api.post<PromptEvalDetail>("/prompt-evals", b).then(r => r.data);
+export const getPromptEval = (id: number) => api.get<PromptEvalDetail>(`/prompt-evals/${id}`).then(r => r.data);
+export const listPromptEvalItemsPaged = (id: number, p: { page: number; page_size: number }) =>
+  getPaginated<PromptEvalItem>(`/prompt-evals/${id}/items`, p);
