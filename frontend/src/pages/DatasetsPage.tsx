@@ -100,17 +100,19 @@ export function DatasetsPage() {
             </Select></Field>
           )}
 
-          <div className="rounded-lg bg-slate-50 px-3 py-2.5">
-            <div className="mb-2 text-[12px] text-slate-500">下载该任务类型的数据模板(列格式按所选任务生成)</div>
-            <div className="flex items-center gap-2">
-              {TEMPLATE_FORMATS.map(t => (
-                <Button key={t.fmt} size="sm" variant="subtle"
-                        onClick={() => downloadTemplateByType(taskType, t.fmt).catch(() => toastError("下载失败"))}>
-                  <Download size={13} /> {t.label}
-                </Button>
-              ))}
+          {kind !== "prompt" && (
+            <div className="rounded-lg bg-slate-50 px-3 py-2.5">
+              <div className="mb-2 text-[12px] text-slate-500">下载该任务类型的数据模板(列格式按所选任务生成)</div>
+              <div className="flex items-center gap-2">
+                {TEMPLATE_FORMATS.map(t => (
+                  <Button key={t.fmt} size="sm" variant="subtle"
+                          onClick={() => downloadTemplateByType(taskType, t.fmt).catch(() => toastError("下载失败"))}>
+                    <Download size={13} /> {t.label}
+                  </Button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </Drawer>
     </>

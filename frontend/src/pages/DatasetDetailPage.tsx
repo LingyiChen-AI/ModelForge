@@ -111,10 +111,12 @@ export function DatasetDetailPage({ id }: { id: number }) {
           <Field label="备注(可选)">
             <Input placeholder="如 修正标注 / 新增 500 条" value={note} onChange={e => setNote(e.target.value)} />
           </Field>
-          <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
-            <span className="text-[12px] text-slate-500">不确定格式?下载模板</span>
-            <TemplateButtons id={id} />
-          </div>
+          {ds?.kind !== "prompt" && (
+            <div className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2">
+              <span className="text-[12px] text-slate-500">不确定格式?下载模板</span>
+              <TemplateButtons id={id} />
+            </div>
+          )}
         </div>
       </Drawer>
     </>

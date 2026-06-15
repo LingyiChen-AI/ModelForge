@@ -2,7 +2,7 @@ import io, pandas as pd
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Response, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from modelforge_common.enums import TaskType
+from modelforge_common.enums import TaskType, DatasetKind
 from app.db import get_db
 from app.authz import require, apply_scope
 from app.storage import build_storage
@@ -99,6 +99,8 @@ def download_template(dataset_id: int, fmt: str = "csv",
                       user: User = Depends(require("dataset:read")),
                       db: Session = Depends(get_db)):
     ds = _get_owned_dataset(db, dataset_id, user)
+    if ds.kind == DatasetKind.PROMPT.value:
+        raise HTTPException(400, "Prompt 测试集无固定模板")
     return _template_response(TaskType(ds.task_type), fmt, f"dataset-{dataset_id}-template")
 
 @router.post("/{dataset_id}/versions", response_model=DatasetVersionOut, status_code=201)
@@ -135,6 +137,8 @@ def download_version(dataset_id: int, version_id: int, fmt: str = "csv",
     if fmt not in ("csv", "jsonl", "xlsx"):
         raise HTTPException(400, "fmt must be csv | jsonl | xlsx")
     df = build_storage().read_snapshot(ver.storage_uri)
-    content, media_type, ext = serialize_df(df, TaskType(ds.task_type), fmt)
+    # Prompt 测试集没有固定 task_type(列即参数)→ 传 None,plain serialize
+    tt = None if ds.kind == DatasetKind.PROMPT.value else TaskType(ds.task_type)
+    content, media_type, ext = serialize_df(df, tt, fmt)
     return Response(content=content, media_type=media_type,
                     headers={"Content-Disposition": f'attachment; filename="dataset-{dataset_id}-v{ver.version_no}.{ext}"'})

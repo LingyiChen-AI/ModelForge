@@ -91,8 +91,9 @@ def template_dataframe(task_type: TaskType) -> pd.DataFrame:
     return pd.DataFrame(TEMPLATE_ROWS[task_type])
 
 
-def serialize_df(df: pd.DataFrame, task_type: TaskType, fmt: str) -> tuple[bytes, str, str]:
-    """Serialize a version's snapshot DataFrame for download (bytes, media_type, ext)."""
+def serialize_df(df: pd.DataFrame, task_type: TaskType | None, fmt: str) -> tuple[bytes, str, str]:
+    """Serialize a version's snapshot DataFrame for download (bytes, media_type, ext).
+    task_type=None (e.g. Prompt 测试集) → no list-column handling, plain serialize."""
     if fmt == "jsonl":
         # pandas serializes list columns as JSON arrays natively
         return (df.to_json(orient="records", lines=True, force_ascii=False).encode("utf-8"),

@@ -173,3 +173,30 @@ def test_prompt_dataset_endpoint(tmp_path):
     up = c.post(f"/datasets/{ds['id']}/versions",
                 files={"file": ("p.csv", buf, "text/csv")}, headers=H)
     assert up.status_code == 201 and up.json()["row_count"] == 2
+
+
+@mock_aws
+def test_prompt_dataset_download_no_500(tmp_path):
+    # 回归:Prompt 测试集下载版本不能因 TaskType("prompt") 抛 500
+    boto3.client("s3", region_name="us-east-1").create_bucket(Bucket="datasets")
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.models import Base
+    eng = create_engine(f"sqlite:///{tmp_path}/t.db"); Base.metadata.create_all(eng)
+    from app import db as dbmod
+    dbmod.SessionLocal = sessionmaker(bind=eng, expire_on_commit=False)
+    d = dbmod.SessionLocal()
+    u = make_user(d, codes=("dataset:read", "dataset:write"), data_scope="all", email="pdl@x.com")
+    H = auth_headers(u.id); d.close()
+    from app.main import app
+    c = TestClient(app)
+    ds = c.post("/datasets/prompt", json={"name": "城市集"}, headers=H).json()
+    df = pd.DataFrame({"city": ["BJ"], "name": ["x"]})
+    buf = io.BytesIO(); df.to_csv(buf, index=False); buf.seek(0)
+    ver = c.post(f"/datasets/{ds['id']}/versions",
+                 files={"file": ("p.csv", buf, "text/csv")}, headers=H).json()
+    # 下载版本:应 200 且内容含列名(plain serialize)
+    dl = c.get(f"/datasets/{ds['id']}/versions/{ver['id']}/download?fmt=csv", headers=H)
+    assert dl.status_code == 200 and b"city" in dl.content
+    # 模板下载:prompt 集无模板 -> 400(非 500)
+    assert c.get(f"/datasets/{ds['id']}/template?fmt=csv", headers=H).status_code == 400
