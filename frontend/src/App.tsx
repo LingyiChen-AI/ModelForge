@@ -9,6 +9,7 @@ import { LoginPage } from "./pages/LoginPage";
 import { UsersPage } from "./pages/UsersPage";
 import { RolesPage } from "./pages/RolesPage";
 import { ApiKeysPage } from "./pages/ApiKeysPage";
+import { SettingsPage } from "./pages/SettingsPage";
 import { BadcasePage } from "./pages/BadcasePage";
 import { BadcaseAnnotateWorkbench } from "./pages/BadcaseAnnotateWorkbench";
 import { useAuth } from "./context/AuthContext";
@@ -41,6 +42,7 @@ export default function App() {
   else if (path === "/users") page = <UsersPage />;
   else if (path === "/roles") page = <RolesPage />;
   else if (path === "/api-keys") page = <ApiKeysPage />;
+  else if (path === "/settings") page = <SettingsPage />;
   else if (/^\/badcase\/annotate\/\d+$/.test(path)) {
     page = <BadcaseAnnotateWorkbench modelVersionId={Number(path.split("/")[3])} />;
   }
