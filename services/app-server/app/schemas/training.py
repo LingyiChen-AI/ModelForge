@@ -48,4 +48,5 @@ class TrainingJobOut(BaseModel):
     created_by_name: str | None = None
     train_datasets: list[str] = []   # ["分类-训练集 V1", "分类-训练集 V2"] (merged)
     eval_datasets: list[str] = []
+    metrics: dict = {}               # train metrics of the produced model version (empty until succeeded)
     class Config: from_attributes = True

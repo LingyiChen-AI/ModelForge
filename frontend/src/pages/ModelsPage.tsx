@@ -3,6 +3,7 @@ import { Boxes, Plus, Trash2, History } from "lucide-react";
 import { listModels, createModel, deleteModel, setModelStage, listModelTrainings, type Model, type ModelTraining } from "../api/client";
 import { Badge, Button, ConfirmDialog, Drawer, EmptyState, Field, Input, Select, PageHeader, TableShell, Creator, CreatedAt, StatusBadge, fmtTime } from "../ui";
 import { toastError } from "../toast";
+import { MetricChips } from "../components/MetricChips";
 import { useAuth } from "../context/AuthContext";
 
 const TASK_TONE: Record<string, "blue" | "violet" | "cyan" | "amber"> = {
@@ -14,31 +15,7 @@ const STAGE: Record<string, { label: string; tone: "gray" | "amber" | "green" }>
   archived: { label: "已归档", tone: "gray" },
 };
 
-const METRIC_LABEL: Record<string, string> = {
-  badcase_fix_rate: "badcase 修复率",
-  accuracy: "准确率", precision: "精确率", recall: "召回率", f1: "F1",
-};
-function fmtMetric(k: string, v: number | string): string {
-  if (typeof v !== "number") return String(v);
-  if (k === "badcase_fix_rate" || k.startsWith("recall@")) return (v * 100).toFixed(1) + "%";
-  return Number.isInteger(v) ? String(v) : v.toFixed(3);
-}
-
-function Metrics({ data }: { data: Record<string, number> }) {
-  const entries = Object.entries(data || {})
-    // surface badcase 修复率 first so it's never dropped by the 5-metric cap
-    .sort(([a], [b]) => (b === "badcase_fix_rate" ? 1 : 0) - (a === "badcase_fix_rate" ? 1 : 0));
-  if (!entries.length) return <span className="text-slate-300">—</span>;
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {entries.slice(0, 5).map(([k, v]) => (
-        <span key={k} className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[11.5px] text-slate-600">
-          {METRIC_LABEL[k] ?? k}=<span className="text-slate-900">{fmtMetric(k, v)}</span>
-        </span>
-      ))}
-    </div>
-  );
-}
+const Metrics = ({ data }: { data: Record<string, number> }) => <MetricChips data={data} />;
 
 export function ModelsPage() {
   const { can } = useAuth();

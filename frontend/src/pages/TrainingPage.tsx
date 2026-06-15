@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Cpu, Play, LineChart, Trash2 } from "lucide-react";
 import { listJobs, createJob, deleteJob, listDatasetTree, listModels, getConfig, type TrainingJob, type DatasetNode, type Model } from "../api/client";
 import { Button, Cascade, ConfirmDialog, Drawer, EmptyState, Field, Input, Mono, PageHeader, Select, StatusBadge, TableShell, Creator, CreatedAt } from "../ui";
+import { MetricChips } from "../components/MetricChips";
 import { toastError } from "../toast";
 import { BASE_MODEL_GROUPS } from "../baseModels";
 import { useAuth } from "../context/AuthContext";
@@ -143,7 +144,7 @@ export function TrainingPage() {
       <TableShell
         loading={loading}
         empty={jobs.length === 0}
-        head={<><th className="w-16">#</th><th>模型</th><th>任务名</th><th>数据集</th><th>状态</th><th className="w-40">进度</th><th>训练人</th><th className="w-36">训练时间</th><th className="w-12 text-right"></th></>}
+        head={<><th className="w-16">#</th><th>模型</th><th>任务名</th><th>数据集</th><th>状态</th><th className="w-40">进度</th><th>指标</th><th>训练人</th><th className="w-36">训练时间</th><th className="w-12 text-right"></th></>}
       >
         {jobs.length === 0 ? (
           <EmptyState icon={<Cpu size={22} />} title="还没有训练任务" hint="先在「模型」页创建模型,再来这里选模型 + 数据集训练。" />
@@ -176,6 +177,7 @@ export function TrainingPage() {
                 <span className="tnum text-[12px] text-slate-400">100%</span>
               ) : <span className="text-slate-300">—</span>}
             </td>
+            <td className="wrap"><MetricChips data={j.metrics} max={4} /></td>
             <td><Creator name={j.created_by_name} /></td>
             <td><CreatedAt at={j.created_at} /></td>
             <td className="text-right">

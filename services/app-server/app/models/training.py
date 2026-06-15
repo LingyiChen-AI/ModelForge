@@ -77,6 +77,20 @@ class TrainingJob(Base, TimestampMixin, CreatorMixin):
     def eval_datasets(self) -> list[str]:
         return self._dataset_labels(self.eval_version_ids)
 
+    @property
+    def metrics(self) -> dict:
+        """Train metrics of the model version this job produced (empty until it succeeds)."""
+        from sqlalchemy import select
+        from sqlalchemy.orm import object_session
+        db = object_session(self)
+        if not db:
+            return {}
+        m = db.execute(
+            select(ModelVersion.train_metrics)
+            .where(ModelVersion.source_training_job_id == self.id)
+            .order_by(ModelVersion.id.desc()).limit(1)).scalar_one_or_none()
+        return m or {}
+
 
 class ModelVersion(Base, TimestampMixin, CreatorMixin):
     __tablename__ = "model_versions"

@@ -77,7 +77,7 @@ export async function downloadVersion(datasetId: number, versionId: number, vers
   triggerBlobDownload(res.data as Blob, `dataset-${datasetId}-v${versionNo}.${fmt}`);
 }
 
-export type TrainingJob = { id: number; name: string; model_id: number | null; model_name: string | null; status: string; progress: number; mlflow_run_id: string | null; error: string | null; created_at: string; created_by_name: string | null; train_datasets: string[]; eval_datasets: string[] };
+export type TrainingJob = { id: number; name: string; model_id: number | null; model_name: string | null; status: string; progress: number; mlflow_run_id: string | null; error: string | null; created_at: string; created_by_name: string | null; train_datasets: string[]; eval_datasets: string[]; metrics: Record<string, number> };
 export const getConfig = () => api.get<{ mlflow_url: string }>("/config").then(r => r.data);
 
 export type Stats = Record<string, number>;
