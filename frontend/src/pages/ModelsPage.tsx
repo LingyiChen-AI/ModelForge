@@ -25,7 +25,9 @@ function fmtMetric(k: string, v: number | string): string {
 }
 
 function Metrics({ data }: { data: Record<string, number> }) {
-  const entries = Object.entries(data || {});
+  const entries = Object.entries(data || {})
+    // surface badcase 修复率 first so it's never dropped by the 5-metric cap
+    .sort(([a], [b]) => (b === "badcase_fix_rate" ? 1 : 0) - (a === "badcase_fix_rate" ? 1 : 0));
   if (!entries.length) return <span className="text-slate-300">—</span>;
   return (
     <div className="flex flex-wrap gap-1.5">
