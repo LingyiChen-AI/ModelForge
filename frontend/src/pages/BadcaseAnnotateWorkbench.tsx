@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Check, Database } from "lucide-react";
+import { ArrowLeft, Check, Database, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   listBadcases, listBadcaseSummary, annotateBadcase, buildBadcaseDataset, listBadcaseLabels,
   type Badcase, type BadcaseSummary,
@@ -13,7 +13,6 @@ const TASK_LABEL: Record<string, string> = {
   classification: "分类", ner: "序列标注", pair: "句对", embedding: "向量检索",
 };
 
-// one-line summary of a badcase's model input, per task type
 function inputSummary(b: Badcase): string {
   const i = b.input ?? {};
   if (b.task_type === "classification") return i.text ?? "";
@@ -22,100 +21,83 @@ function inputSummary(b: Badcase): string {
   if (b.task_type === "embedding") return i.query ?? "";
   return JSON.stringify(i);
 }
-function annotationSummary(b: Badcase): string {
-  const a = b.annotation ?? {};
-  if (b.task_type === "classification" || b.task_type === "pair") return String(a.label ?? "");
-  if (b.task_type === "ner") return (a.tags ?? []).join(" ");
-  if (b.task_type === "embedding") return `pos: ${(a.pos ?? []).join("、")}`;
-  return JSON.stringify(a);
-}
 
-// Compact, data-dense row: id · input (truncated, with annotation below) · status on the right.
-function BadcaseRow({ b }: { b: Badcase }) {
-  const summary = inputSummary(b);
-  return (
-    <div className="flex items-center gap-3 px-4 py-2.5 transition-colors hover:bg-slate-50">
-      <span className="w-12 shrink-0 font-mono text-[12px] tabular-nums text-slate-400">#{b.id}</span>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[13.5px] text-slate-800" title={summary}>{summary}</div>
-        {b.annotation && (
-          <div className="mt-0.5 truncate text-[12px] text-slate-400" title={annotationSummary(b)}>
-            标注 · <span className="text-slate-500">{annotationSummary(b)}</span>
-          </div>
-        )}
-      </div>
-      <div className="flex shrink-0 flex-wrap items-center justify-end gap-1">
-        {b.fixed_by.length > 0
-          ? b.fixed_by.map(f => <Badge key={f.version_label} tone="green" dot>V{f.version_label} 已修复</Badge>)
-          : <Badge tone="amber" dot>未修复</Badge>}
-      </div>
-    </div>
-  );
-}
+type Filter = "all" | "pending" | "unfixed" | "fixed";
+const statusOf = (b: Badcase): Filter =>
+  b.status === "reported" ? "pending" : b.fixed_by.length > 0 ? "fixed" : "unfixed";
 
-function BadcaseList({ items }: { items: Badcase[] }) {
-  return (
-    <div className="max-w-5xl overflow-hidden rounded-xl border border-slate-200 bg-white">
-      <div className="divide-y divide-slate-100">
-        {items.map(b => <BadcaseRow key={b.id} b={b} />)}
-      </div>
-    </div>
-  );
+// small status pill shown on each list row + in the editor header
+function StatusPill({ b }: { b: Badcase }) {
+  const s = statusOf(b);
+  if (s === "fixed") return <Badge tone="green" dot>已修复</Badge>;
+  if (s === "pending") return <Badge tone="amber" dot>未标注</Badge>;
+  return <Badge tone="gray" dot>已标注</Badge>;
 }
-
-type Tab = "pending" | "unfixed" | "fixed";
 
 export function BadcaseAnnotateWorkbench({ modelVersionId }: { modelVersionId: number }) {
   const [all, setAll] = useState<Badcase[]>([]);
-  const [queue, setQueue] = useState<Badcase[]>([]);   // pending items to annotate this session
   const [sum, setSum] = useState<BadcaseSummary | null>(null);
+  const [filter, setFilter] = useState<Filter>("pending");
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [val, setVal] = useState<Record<string, any>>({});
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [labelOptions, setLabelOptions] = useState<string[]>([]);
-  const [tab, setTab] = useState<Tab>("pending");
 
   const reloadSummary = () =>
     listBadcaseSummary().then(s => setSum(s.find(x => x.model_version_id === modelVersionId) ?? null));
 
-  const loadAll = () =>
-    listBadcases({ model_version_id: modelVersionId }).then(rows => {
-      setAll(rows);
-      setQueue(rows.filter(b => b.status === "reported"));
-      return rows;
-    });
-
   useEffect(() => {
     setLoading(true);
     listBadcaseLabels(modelVersionId).then(setLabelOptions).catch(() => setLabelOptions([]));
-    Promise.all([loadAll(), reloadSummary()])
+    Promise.all([listBadcases({ model_version_id: modelVersionId }), reloadSummary()])
       .then(([rows]) => {
-        // open the first non-empty tab
-        const pending = rows.filter(b => b.status === "reported").length;
-        const fixed = rows.filter(b => b.fixed_by.length > 0).length;
-        setTab(pending > 0 ? "pending" : fixed > 0 ? "fixed" : "unfixed");
+        setAll(rows);
+        const pending = rows.filter(b => b.status === "reported");
+        setFilter(pending.length ? "pending" : "all");
+        setSelectedId((pending[0] ?? rows[0])?.id ?? null);
       })
       .finally(() => setLoading(false));
   }, [modelVersionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const unfixed = useMemo(() => all.filter(b => b.status !== "reported" && b.fixed_by.length === 0), [all]);
-  const fixed = useMemo(() => all.filter(b => b.fixed_by.length > 0), [all]);
+  const counts = useMemo(() => ({
+    all: all.length,
+    pending: all.filter(b => statusOf(b) === "pending").length,
+    unfixed: all.filter(b => statusOf(b) === "unfixed").length,
+    fixed: all.filter(b => statusOf(b) === "fixed").length,
+  }), [all]);
 
-  const current = queue[0] ?? null;
-  useEffect(() => { setVal(current?.annotation ?? {}); }, [current]);
-  const valid = current ? annotationValid(current.task_type, val) : false;
+  const list = useMemo(
+    () => (filter === "all" ? all : all.filter(b => statusOf(b) === filter)),
+    [all, filter],
+  );
+  const selected = all.find(b => b.id === selectedId) ?? null;
+  const idxInList = list.findIndex(b => b.id === selectedId);
 
-  const save = () => {
-    if (!current) return;
+  // keep a valid selection when the filter/list changes
+  useEffect(() => {
+    if (!list.find(b => b.id === selectedId)) setSelectedId(list[0]?.id ?? null);
+  }, [filter]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setVal(selected?.annotation ?? {}); }, [selectedId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const valid = selected ? annotationValid(selected.task_type, val) : false;
+
+  const goto = (i: number) => { if (list[i]) setSelectedId(list[i].id); };
+
+  const save = (advance: boolean) => {
+    if (!selected) return;
     setBusy(true);
-    annotateBadcase(current.id, val)
+    annotateBadcase(selected.id, val)
       .then(updated => {
-        toastSuccess("已标注");
-        setQueue(q => q.slice(1));
-        setAll(a => a.map(b => (b.id === updated.id ? updated : b)));   // -> moves into 未修复
+        toastSuccess("已保存标注");
+        setAll(a => a.map(b => (b.id === updated.id ? updated : b)));
         reloadSummary();
+        if (advance) {
+          const next = list[idxInList + 1];
+          if (next) setSelectedId(next.id);
+        }
       })
-      .catch(() => toastError("标注失败"))
+      .catch(() => toastError("保存失败"))
       .finally(() => setBusy(false));
   };
 
@@ -126,7 +108,8 @@ export function BadcaseAnnotateWorkbench({ modelVersionId }: { modelVersionId: n
       if (cases.length === 0) { toastError("没有已标注未生成的 badcase"); return; }
       const res = await buildBadcaseDataset(cases.map(c => c.id));
       toastSuccess(`已生成训练集 ${res.dataset_name}`);
-      await loadAll(); reloadSummary();
+      const rows = await listBadcases({ model_version_id: modelVersionId });
+      setAll(rows); reloadSummary();
     } catch {
       toastError("生成训练集失败");
     } finally {
@@ -134,22 +117,21 @@ export function BadcaseAnnotateWorkbench({ modelVersionId }: { modelVersionId: n
     }
   };
 
-  const title = useMemo(
-    () => sum ? `${sum.model_name ?? sum.model_version_id} · V${sum.model_version_label ?? "?"}` : "标注工作台",
-    [sum],
-  );
+  const title = sum ? `${sum.model_name ?? sum.model_version_id} · V${sum.model_version_label ?? "?"}` : "数据标注工作台";
+  const pct = sum && sum.reported > 0 ? Math.round((sum.annotated / sum.reported) * 100) : 0;
 
-  const TABS: { key: Tab; label: string; count: number }[] = [
-    { key: "pending", label: "未标注", count: queue.length },
-    { key: "unfixed", label: "未修复", count: unfixed.length },
-    { key: "fixed", label: "已修复", count: fixed.length },
+  const TABS: { key: Filter; label: string }[] = [
+    { key: "pending", label: "未标注" },
+    { key: "unfixed", label: "未修复" },
+    { key: "fixed", label: "已修复" },
+    { key: "all", label: "全部" },
   ];
 
   return (
     <div>
       <PageHeader
         title={title}
-        subtitle={sum ? `${TASK_LABEL[sum.task_type] ?? sum.task_type} · 共 ${sum.reported} 条 badcase` : "标注工作台"}
+        subtitle={sum ? `${TASK_LABEL[sum.task_type] ?? sum.task_type} · 标注进度 ${sum.annotated}/${sum.reported} (${pct}%)` : "数据标注工作台"}
         actions={
           <div className="flex items-center gap-2">
             <Button variant="subtle" onClick={() => navigate("/badcase")}><ArrowLeft size={16} /> 返回</Button>
@@ -160,46 +142,82 @@ export function BadcaseAnnotateWorkbench({ modelVersionId }: { modelVersionId: n
         }
       />
 
-      {/* category tabs */}
-      <div className="mb-4 flex items-center gap-1 border-b border-slate-200">
-        {TABS.map(t => (
-          <button
-            key={t.key} onClick={() => setTab(t.key)}
-            className={"-mb-px cursor-pointer border-b-2 px-3.5 py-2 text-[13px] transition " +
-              (tab === t.key ? "border-brand-500 font-medium text-brand-700" : "border-transparent text-slate-500 hover:text-slate-700")}
-          >
-            {t.label}
-            <span className={"ml-1.5 rounded-full px-1.5 py-0.5 text-[11px] " +
-              (tab === t.key ? "bg-brand-50 text-brand-600" : "bg-slate-100 text-slate-500")}>{t.count}</span>
-          </button>
-        ))}
-      </div>
+      {/* progress bar */}
+      {sum && (
+        <div className="mb-3 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+          <div className="h-full rounded-full bg-brand-500 transition-all duration-500" style={{ width: `${pct}%` }} />
+        </div>
+      )}
 
-      {loading ? null : tab === "pending" ? (
-        current ? (
-          <div className="max-w-3xl rounded-xl border border-slate-200 bg-white p-5">
-            <div className="mb-3 text-[13px] text-slate-500">Badcase #{current.id} · 剩余待标注 {queue.length}</div>
-            <BadcaseAnnotateForm badcase={current} val={val} onChange={setVal} labelOptions={labelOptions} />
-            <div className="mt-5 flex items-center justify-end gap-2">
-              <Button variant="subtle" disabled={busy} onClick={() => setQueue(q => [...q.slice(1), q[0]])}>跳过</Button>
-              <Button variant="primary" disabled={!valid} loading={busy} onClick={save}><Check size={16} /> 保存并下一条</Button>
+      {loading ? (
+        <div className="py-20 text-center text-[13px] text-slate-400">加载中…</div>
+      ) : (
+        <div className="flex h-[72vh] overflow-hidden rounded-xl border border-slate-200 bg-white">
+          {/* ── left: case list ── */}
+          <div className="flex w-[300px] shrink-0 flex-col border-r border-slate-200">
+            <div className="flex shrink-0 gap-1 border-b border-slate-200 p-2">
+              {TABS.map(t => (
+                <button
+                  key={t.key} onClick={() => setFilter(t.key)}
+                  className={"flex-1 rounded-md px-1.5 py-1.5 text-[12px] transition cursor-pointer " +
+                    (filter === t.key ? "bg-brand-50 font-medium text-brand-700" : "text-slate-500 hover:bg-slate-50")}
+                >
+                  {t.label}<span className="ml-1 text-[11px] opacity-70">{counts[t.key]}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex-1 overflow-y-auto">
+              {list.length === 0 ? (
+                <div className="py-12 text-center text-[12.5px] text-slate-400">该分类下暂无 badcase</div>
+              ) : list.map(b => (
+                <button
+                  key={b.id} onClick={() => setSelectedId(b.id)}
+                  className={"flex w-full items-start gap-2 border-b border-slate-50 px-3 py-2.5 text-left transition cursor-pointer " +
+                    (b.id === selectedId ? "bg-brand-50/60" : "hover:bg-slate-50")}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-0.5 flex items-center gap-1.5">
+                      <span className="font-mono text-[11px] tabular-nums text-slate-400">#{b.id}</span>
+                      <StatusPill b={b} />
+                    </div>
+                    <div className="truncate text-[13px] text-slate-700">{inputSummary(b)}</div>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
-        ) : (
-          <EmptyState icon={<Check size={20} />} title="全部标注完成" hint="切换到「未修复」或「已修复」查看处理情况。" />
-        )
-      ) : tab === "unfixed" ? (
-        unfixed.length === 0 ? (
-          <EmptyState icon={<Check size={20} />} title="暂无未修复 badcase" hint="标注后生成 badcase- 训练集并训练,即可修复。" />
-        ) : (
-          <BadcaseList items={unfixed} />
-        )
-      ) : (
-        fixed.length === 0 ? (
-          <EmptyState icon={<Check size={20} />} title="暂无已修复 badcase" hint="用已标注数据训练模型后,修复的 badcase 会标上版本。" />
-        ) : (
-          <BadcaseList items={fixed} />
-        )
+
+          {/* ── right: annotation editor ── */}
+          <div className="flex min-w-0 flex-1 flex-col">
+            {selected ? (
+              <>
+                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-slate-100 px-5 py-3">
+                  <div className="flex items-center gap-2">
+                    <span className="font-mono text-[13px] text-slate-500">Badcase #{selected.id}</span>
+                    <StatusPill b={selected} />
+                    {selected.fixed_by.map(f => <Badge key={f.version_label} tone="green">V{f.version_label}</Badge>)}
+                  </div>
+                  <div className="flex items-center gap-1 text-[12px] text-slate-400">
+                    <button className="rounded p-1 hover:bg-slate-100 disabled:opacity-30 cursor-pointer" disabled={idxInList <= 0} onClick={() => goto(idxInList - 1)}><ChevronLeft size={16} /></button>
+                    <span className="tabular-nums">{idxInList + 1} / {list.length}</span>
+                    <button className="rounded p-1 hover:bg-slate-100 disabled:opacity-30 cursor-pointer" disabled={idxInList >= list.length - 1} onClick={() => goto(idxInList + 1)}><ChevronRight size={16} /></button>
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                  <BadcaseAnnotateForm badcase={selected} val={val} onChange={setVal} labelOptions={labelOptions} />
+                </div>
+                <div className="flex shrink-0 items-center justify-end gap-2 border-t border-slate-100 px-5 py-3">
+                  <Button variant="subtle" disabled={busy || !valid} onClick={() => save(false)}>保存</Button>
+                  <Button variant="primary" disabled={busy || !valid} loading={busy} onClick={() => save(true)}>
+                    <Check size={16} /> 保存并下一条
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <EmptyState icon={<Check size={20} />} title="选择左侧一条 badcase 开始标注" hint="未标注、未修复、已修复都可以在这里标注或修改标注。" />
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
