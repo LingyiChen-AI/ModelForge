@@ -270,7 +270,12 @@ export type PromptEval = {
 };
 export type PromptEvalDetail = PromptEval & { arms: PromptEvalArmRow[] };
 export type PromptEvalOutputRow = { id: number; arm_id: number; output_text: string; status: string; error: string | null; latency_ms: number };
-export type PromptEvalItem = { id: number; item_index: number; dataset_version_id: number; row_index: number; inputs: Record<string, any>; outputs: PromptEvalOutputRow[] };
+export type PromptEvalItem = {
+  id: number; item_index: number; dataset_version_id: number; row_index: number;
+  inputs: Record<string, any>; outputs: PromptEvalOutputRow[];
+  winner_arm_id: number | null; all_bad: boolean; is_good: boolean | null;
+  annotated_by_name: string | null; evaluated_at: string | null;
+};
 export type PromptEvalOptions = {
   prompt_versions: { id: number; label: string }[];
   models: { id: number; label: string }[];
@@ -282,5 +287,15 @@ export const getPromptEvalOptions = () => api.get<PromptEvalOptions>("/prompt-ev
 export const createPromptEval = (b: { eval_type: string; name: string; prompt_version_ids: number[]; model_ids: number[]; dataset_version_ids: number[] }) =>
   api.post<PromptEvalDetail>("/prompt-evals", b).then(r => r.data);
 export const getPromptEval = (id: number) => api.get<PromptEvalDetail>(`/prompt-evals/${id}`).then(r => r.data);
-export const listPromptEvalItemsPaged = (id: number, p: { page: number; page_size: number }) =>
+export const listPromptEvalItemsPaged = (id: number, p: { bucket?: string; page: number; page_size: number }) =>
   getPaginated<PromptEvalItem>(`/prompt-evals/${id}/items`, p);
+export const submitPromptEvalVerdict = (itemId: number, b: { winner_arm_id?: number; all_bad?: boolean; is_good?: boolean }) =>
+  api.patch<PromptEvalItem>(`/prompt-evals/items/${itemId}/verdict`, b).then(r => r.data);
+export type PromptEvalArmStat = { arm_id: number; label: string; prompt_version_id: number; model_id: number; wins: number; win_rate: number };
+export type PromptEvalStats = {
+  eval_type: string; evaluated: number; total: number;
+  arms?: PromptEvalArmStat[]; all_bad?: number; best_arm_id?: number | null;
+  good?: number; bad?: number; good_rate?: number;
+  comparison?: { compare_run_id: number; compare_version_label: string | null; comparable: number; improved: number; regressed: number; improved_rate: number; regressed_rate: number } | null;
+};
+export const getPromptEvalStats = (id: number) => api.get<PromptEvalStats>(`/prompt-evals/${id}/stats`).then(r => r.data);
