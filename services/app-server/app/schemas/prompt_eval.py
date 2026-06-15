@@ -61,6 +61,17 @@ class ItemOut(BaseModel):
     row_index: int
     inputs: dict
     outputs: list[OutputOut] = []
+    winner_arm_id: int | None = None
+    all_bad: bool = False
+    is_good: bool | None = None
+    annotated_by_name: str | None = None
+    evaluated_at: datetime | None = None
 
     class Config:
         from_attributes = True
+
+
+class VerdictIn(BaseModel):
+    winner_arm_id: int | None = None
+    all_bad: bool = False
+    is_good: bool | None = None

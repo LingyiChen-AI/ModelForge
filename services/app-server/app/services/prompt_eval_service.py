@@ -1,9 +1,10 @@
+from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from app.models.prompt import PromptVersion
 from app.models.dataset import DatasetVersion
 from app.models.llm import LlmModel
-from app.models.prompt_eval import PromptEvalRun, PromptEvalArm
+from app.models.prompt_eval import PromptEvalRun, PromptEvalArm, PromptEvalItem
 from app.celery_client import send_prompt_eval_task   # module-level for monkeypatch
 
 
@@ -87,3 +88,33 @@ def create_and_dispatch(db: Session, body, created_by=None) -> PromptEvalRun:
     run.celery_task_id = send_prompt_eval_task(run.id)
     db.commit(); db.refresh(run)
     return run
+
+
+def submit_verdict(db: Session, item_id: int, body, user_id: int | None) -> PromptEvalItem | None:
+    item = db.get(PromptEvalItem, item_id)
+    if item is None:
+        return None
+    run = db.get(PromptEvalRun, item.run_id)
+    if run.eval_type == "single_prompt":
+        if body.is_good is None:
+            raise ValueError("单 prompt 评测需提交 好 / 坏")
+        item.is_good = body.is_good
+        item.winner_arm_id = None
+        item.all_bad = False
+    else:
+        if body.all_bad:
+            item.all_bad = True
+            item.winner_arm_id = None
+        elif body.winner_arm_id is not None:
+            arm = db.get(PromptEvalArm, body.winner_arm_id)
+            if arm is None or arm.run_id != run.id:
+                raise ValueError("winner_arm_id 不属于该评测")
+            item.winner_arm_id = body.winner_arm_id
+            item.all_bad = False
+        else:
+            raise ValueError("多臂评测需选择获胜方或『都一样坏』")
+        item.is_good = None
+    item.evaluated_by = user_id
+    item.evaluated_at = datetime.now(timezone.utc)
+    db.commit(); db.refresh(item)
+    return item

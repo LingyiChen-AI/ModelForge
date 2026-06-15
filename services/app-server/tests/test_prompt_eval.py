@@ -199,3 +199,98 @@ def test_bootstrap_has_prompteval_annotate(session_factory):
     viewer = db.execute(select(Role).where(Role.name == "viewer")).scalar_one()
     assert "prompteval:annotate" in {p.code for p in member.permissions}
     assert "prompteval:annotate" not in {p.code for p in viewer.permissions}
+
+
+def _seed_eval_run(db, eval_type, n_arms=2):
+    """建一个 run + n_arms 个 arm + 一个 item(无 output),返回 (run, [arm...], item)。"""
+    from app.models.prompt_eval import PromptEvalRun, PromptEvalArm, PromptEvalItem
+    run = PromptEvalRun(name="r", eval_type=eval_type,
+                        prompt_version_ids=[1], model_ids=[2], dataset_version_ids=[3])
+    for i in range(n_arms):
+        run.arms.append(PromptEvalArm(arm_index=i, prompt_version_id=1, model_id=2, label=f"L{i}"))
+    db.add(run); db.commit(); db.refresh(run)
+    it = PromptEvalItem(run_id=run.id, item_index=0, dataset_version_id=3, row_index=0, inputs={})
+    db.add(it); db.commit(); db.refresh(it)
+    return run, run.arms, it
+
+
+def test_submit_verdict_multi_and_single(session_factory):
+    import app.services.prompt_eval_service as svc
+    db = session_factory()
+    run, arms, it = _seed_eval_run(db, "multi_prompt", 2)
+
+    class WIN: winner_arm_id = None; all_bad = False; is_good = None
+    WIN.winner_arm_id = arms[1].id
+    out = svc.submit_verdict(db, it.id, WIN, user_id=None)
+    assert out.winner_arm_id == arms[1].id and out.evaluated_at is not None and out.all_bad is False
+
+    class AB: winner_arm_id = None; all_bad = True; is_good = None
+    _, _, it2 = _seed_eval_run(db, "multi_prompt", 2)
+    out2 = svc.submit_verdict(db, it2.id, AB, user_id=None)
+    assert out2.all_bad is True and out2.winner_arm_id is None
+
+    import pytest
+    class NONE: winner_arm_id = None; all_bad = False; is_good = None
+    _, _, it3 = _seed_eval_run(db, "multi_prompt", 2)
+    with pytest.raises(ValueError):
+        svc.submit_verdict(db, it3.id, NONE, user_id=None)
+
+    class BADARM: winner_arm_id = 999999; all_bad = False; is_good = None
+    _, _, it4 = _seed_eval_run(db, "multi_prompt", 2)
+    with pytest.raises(ValueError):
+        svc.submit_verdict(db, it4.id, BADARM, user_id=None)
+
+    class GOOD: winner_arm_id = None; all_bad = False; is_good = True
+    _, _, its = _seed_eval_run(db, "single_prompt", 1)
+    outs = svc.submit_verdict(db, its.id, GOOD, user_id=None)
+    assert outs.is_good is True and outs.evaluated_at is not None
+
+    class NOGOOD: winner_arm_id = None; all_bad = False; is_good = None
+    _, _, its2 = _seed_eval_run(db, "single_prompt", 1)
+    with pytest.raises(ValueError):
+        svc.submit_verdict(db, its2.id, NOGOOD, user_id=None)
+
+    assert svc.submit_verdict(db, 999999, GOOD, user_id=None) is None
+
+
+def test_stats_multi_and_single(session_factory):
+    from datetime import datetime, timezone
+    from app.models.prompt_eval import PromptEvalItem, PromptEvalArm, PromptEvalRun
+    from app.services import prompt_eval_stats as st
+    db = session_factory()
+    run, arms, it = _seed_eval_run(db, "multi_prompt", 3)
+    it.winner_arm_id = arms[0].id; it.evaluated_at = datetime.now(timezone.utc)
+    for w in (arms[0].id, arms[1].id):
+        x = PromptEvalItem(run_id=run.id, item_index=99, dataset_version_id=3, row_index=0,
+                           inputs={}, winner_arm_id=w, evaluated_at=datetime.now(timezone.utc))
+        db.add(x)
+    db.commit()
+    s = st.stats(db, run.id)
+    by = {a["arm_id"]: a for a in s["arms"]}
+    assert by[arms[0].id]["wins"] == 2 and by[arms[1].id]["wins"] == 1
+    assert s["best_arm_id"] == arms[0].id and s["evaluated"] == 3
+
+    from app.models.prompt import Prompt, PromptVersion
+    p = Prompt(name="pp")
+    p.versions.append(PromptVersion(version_no=1, system_prompt="", user_prompt="{{x}}", params=["x"]))
+    p.versions.append(PromptVersion(version_no=2, system_prompt="", user_prompt="{{x}}", params=["x"]))
+    db.add(p); db.commit(); db.refresh(p)
+    v1, v2 = p.versions[0].id, p.versions[1].id
+    prev = PromptEvalRun(name="prev", eval_type="single_prompt", prompt_version_ids=[v1],
+                         model_ids=[2], dataset_version_ids=[3])
+    prev.arms.append(PromptEvalArm(arm_index=0, prompt_version_id=v1, model_id=2, label="L"))
+    db.add(prev); db.commit(); db.refresh(prev)
+    db.add(PromptEvalItem(run_id=prev.id, item_index=0, dataset_version_id=3, row_index=0,
+                          inputs={}, is_good=False, evaluated_at=datetime.now(timezone.utc)))
+    db.commit()
+    cur = PromptEvalRun(name="cur", eval_type="single_prompt", prompt_version_ids=[v2],
+                        model_ids=[2], dataset_version_ids=[3], compare_to_version_id=v1)
+    cur.arms.append(PromptEvalArm(arm_index=0, prompt_version_id=v2, model_id=2, label="L2"))
+    db.add(cur); db.commit(); db.refresh(cur)
+    db.add(PromptEvalItem(run_id=cur.id, item_index=0, dataset_version_id=3, row_index=0,
+                          inputs={}, is_good=True, evaluated_at=datetime.now(timezone.utc)))
+    db.commit()
+    s2 = st.stats(db, cur.id)
+    assert s2["good"] == 1 and s2["bad"] == 0
+    assert s2["comparison"]["improved"] == 1 and s2["comparison"]["regressed"] == 0
+    assert s2["comparison"]["comparable"] == 1
