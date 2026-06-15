@@ -63,3 +63,16 @@ def test_create_prompt_version_skips_task_validation(session_factory):
     df = pd.DataFrame([{"city": "BJ", "name": "x"}])
     v = create_version(db, _FakeStore(), ds, df, created_by=None)
     assert v.stats["columns"] == ["city", "name"] and v.version_no == 1
+
+
+def test_prompt_out_serializes_latest(session_factory):
+    from app.models.prompt import Prompt, PromptVersion
+    from app.schemas.prompt import PromptOut, PromptDetailOut
+    db = session_factory()
+    p = Prompt(name="x")
+    p.versions.append(PromptVersion(version_no=1, system_prompt="s", user_prompt="{{ a }}", params=["a"]))
+    db.add(p); db.commit(); db.refresh(p)
+    out = PromptOut.model_validate(p).model_dump()
+    assert out["latest_version_no"] == 1 and out["latest_params"] == ["a"]
+    detail = PromptDetailOut.model_validate(p).model_dump()
+    assert detail["versions"][0]["user_prompt"] == "{{ a }}"
