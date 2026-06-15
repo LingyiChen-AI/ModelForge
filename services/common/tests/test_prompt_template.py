@@ -33,3 +33,15 @@ def test_validate_unbalanced():
 
 def test_validate_nested():
     assert validate_template("{{ {{ x }} }}") != []
+
+
+def test_render_basic():
+    from modelforge_common.prompt_template import render
+    assert render("你好 {{ name }}", {"name": "小明"}) == "你好 小明"
+
+
+def test_render_missing_and_types():
+    from modelforge_common.prompt_template import render
+    assert render("{{ a }}-{{ b }}", {"a": 1}) == "1-"        # 缺参数→空;数字→str
+    assert render("{{ x }}", {"x": None}) == ""               # None→空
+    assert render("no params", {}) == "no params"

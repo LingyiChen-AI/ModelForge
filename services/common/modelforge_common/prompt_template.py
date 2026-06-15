@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import re
 
-__all__ = ["extract_params", "validate_template"]
+__all__ = ["extract_params", "validate_template", "render"]
 
 # {{ name }} —— 两侧空格可选;name = 字母/数字/下划线/中文
 _PARAM_RE = re.compile(r"\{\{\s*([\w一-鿿]+)\s*\}\}")
@@ -40,3 +40,11 @@ def validate_template(text: str) -> list[str]:
         if e not in out:
             out.append(e)
     return out
+
+
+def render(template: str, values: dict) -> str:
+    """把 {{ name }} 替换为 str(values.get(name, ""));None / 缺失 → 空串。"""
+    def _sub(m):
+        v = values.get(m.group(1))
+        return "" if v is None else str(v)
+    return _PARAM_RE.sub(_sub, template or "")
