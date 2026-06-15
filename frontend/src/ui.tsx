@@ -171,10 +171,11 @@ export type CascadeGroup = {
   items: { value: string; label: string; hint?: string }[];
 };
 export function Cascade({
-  groups, value, onChange, multiple = false, emptyHint = "暂无可选项", rightEmptyHint = "该项下暂无内容",
+  groups, value, onChange, multiple = false, flat = false,
+  emptyHint = "暂无可选项", rightEmptyHint = "该项下暂无内容",
 }: {
   groups: CascadeGroup[]; value: string | string[]; onChange: (v: any) => void;
-  multiple?: boolean; emptyHint?: string; rightEmptyHint?: string;
+  multiple?: boolean; flat?: boolean; emptyHint?: string; rightEmptyHint?: string;
 }) {
   const selected: string[] = multiple ? (Array.isArray(value) ? value : []) : (value ? [value as string] : []);
   const isSel = (v: string) => selected.includes(v);
@@ -191,6 +192,46 @@ export function Cascade({
   if (groups.length === 0) {
     return <div className="rounded-lg border border-slate-200 px-3 py-6 text-center text-[13px] text-slate-400">{emptyHint}</div>;
   }
+
+  // flat: every group expanded as a checklist — all versions visible without clicking,
+  // so a new user can't miss a dataset hidden behind a collapsed group.
+  if (flat) {
+    return (
+      <div className="max-h-80 divide-y divide-slate-100 overflow-y-auto rounded-lg border border-slate-200">
+        {groups.map(g => (
+          <div key={g.key}>
+            <div className="flex items-center gap-1.5 bg-slate-50/70 px-3 py-1.5 text-[12px] font-medium text-slate-500">
+              <span className="truncate">{g.label}</span>
+              {g.count != null && <span className="text-slate-400">({g.count})</span>}
+            </div>
+            {g.items.length === 0 ? (
+              <div className="px-3 py-2 text-[12px] text-slate-400">{rightEmptyHint}</div>
+            ) : g.items.map(it => {
+              const sel = isSel(it.value);
+              return (
+                <button
+                  key={it.value} type="button" onClick={() => pick(it.value)}
+                  className={cx("flex w-full cursor-pointer items-center justify-between gap-2 px-3 py-2 pl-4 text-left text-[13px] transition",
+                    sel ? "bg-brand-50 text-brand-700" : "text-slate-600 hover:bg-slate-50")}
+                >
+                  <span className="flex items-center gap-2 truncate">
+                    <span className={cx("flex h-4 w-4 shrink-0 items-center justify-center border",
+                      multiple ? "rounded" : "rounded-full",
+                      sel ? "border-brand-500 bg-brand-500 text-white" : "border-slate-300")}>
+                      {sel && <Check size={11} strokeWidth={3} />}
+                    </span>
+                    <span className="truncate">{it.label}</span>
+                  </span>
+                  {it.hint && <span className="shrink-0 text-[11.5px] text-slate-400">{it.hint}</span>}
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   const activeGroup = groups.find(g => g.key === active) ?? groups[0];
   return (
     <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-slate-200">

@@ -245,6 +245,7 @@ export function TrainingPage() {
               </div>
               <Cascade
                 multiple
+                flat
                 groups={modelId ? groups : []}
                 value={dvIds}
                 onChange={setDvIds}
@@ -261,6 +262,7 @@ export function TrainingPage() {
               </div>
               <Cascade
                 multiple
+                flat
                 groups={modelId ? evalGroups : []}
                 value={evalDvIds}
                 onChange={setEvalDvIds}
