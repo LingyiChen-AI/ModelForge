@@ -3,25 +3,12 @@ import { BarChart3, FlaskConical, Trash2 } from "lucide-react";
 import { listEvalRuns, createEvalRun, deleteEvalRun, listModelVersions, listVersionOptions, type EvalRun, type ModelVersion, type VersionOption } from "../api/client";
 import { Button, ConfirmDialog, Drawer, EmptyState, Field, Mono, PageHeader, Select, StatusBadge, TableShell, Creator, CreatedAt } from "../ui";
 import { toastError } from "../toast";
+import { MetricChips as Metrics } from "../components/MetricChips";
 import { useAuth } from "../context/AuthContext";
 
 const TASK_LABEL: Record<string, string> = {
   classification: "分类", ner: "序列标注", pair: "句对", embedding: "向量",
 };
-
-function Metrics({ data }: { data: Record<string, number> }) {
-  const entries = Object.entries(data || {});
-  if (!entries.length) return <span className="text-slate-300">—</span>;
-  return (
-    <div className="flex flex-wrap gap-1.5">
-      {entries.slice(0, 6).map(([k, v]) => (
-        <span key={k} className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[11.5px] text-slate-600">
-          {k}=<span className="text-slate-900">{typeof v === "number" ? (Number.isInteger(v) ? v : v.toFixed(3)) : String(v)}</span>
-        </span>
-      ))}
-    </div>
-  );
-}
 
 export function EvalPage() {
   const { can } = useAuth();
