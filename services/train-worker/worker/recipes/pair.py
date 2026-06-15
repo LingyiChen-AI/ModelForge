@@ -7,9 +7,12 @@ from worker.recipes.base import Recipe, TrainResult, hf_progress_callback
 def _targets(df):
     if "score" in df.columns:
         return df["score"].astype(float).tolist()
-    labels = sorted(df["label"].unique().tolist())
+    # coerce labels to str first: merging a badcase set (str "0"/"1") with an original
+    # set (int 0/1) yields a mixed-type column, and sorted() can't compare str vs int.
+    s = df["label"].astype(str)
+    labels = sorted(s.unique().tolist())
     l2i = {l: i for i, l in enumerate(labels)}
-    return df["label"].map(l2i).astype(float).tolist()
+    return s.map(l2i).astype(float).tolist()
 
 class PairRecipe(Recipe):
     def train(self, df, base_model, hyperparams, output_dir, on_progress=None, eval_df=None) -> TrainResult:
