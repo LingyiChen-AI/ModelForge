@@ -21,6 +21,7 @@ class Badcase(Base, TimestampMixin):
     annotated_at: Mapped[datetime | None] = mapped_column(nullable=True)
     dataset_version_id: Mapped[int | None] = mapped_column(
         ForeignKey("dataset_versions.id"), nullable=True)
+    fixed_by: Mapped[list] = mapped_column(JSON, default=list)  # [{model_version_id, version_label, at}]
     model_version: Mapped["ModelVersion | None"] = relationship(  # type: ignore  # noqa: F821
         "ModelVersion", lazy="selectin", foreign_keys=[model_version_id])
 
@@ -31,3 +32,7 @@ class Badcase(Base, TimestampMixin):
     @property
     def model_version_label(self) -> str | None:
         return self.model_version.mlflow_version if self.model_version else None
+
+    @property
+    def is_fixed(self) -> bool:
+        return bool(self.fixed_by)

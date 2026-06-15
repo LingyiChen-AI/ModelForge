@@ -53,6 +53,16 @@ def test_report_badcase_with_api_key(session_factory, monkeypatch):
                   json={"model_version_id": 99999, "input": {"text": "x"}, "inference": {}}).status_code == 422
 
 
+def test_badcase_out_includes_fixed_by():
+    from datetime import datetime
+    from app.schemas.badcase import BadcaseOut
+    out = BadcaseOut(id=1, model_version_id=1, task_type="classification",
+                     input={"text": "a"}, inference={}, category=None, source=None,
+                     source_ref=None, status="reported", annotation=None,
+                     dataset_version_id=None, created_at=datetime(2026, 6, 15))
+    assert out.fixed_by == []
+
+
 def test_annotate_missing_and_ok(session_factory, monkeypatch):
     mvid = _setup_version(session_factory)
     from app import db as dbmod

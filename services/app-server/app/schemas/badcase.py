@@ -33,6 +33,7 @@ class BadcaseOut(BaseModel):
     annotation: dict | None
     dataset_version_id: int | None
     created_at: datetime
+    fixed_by: list[dict] = []
 
     class Config:
         from_attributes = True
