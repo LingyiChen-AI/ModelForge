@@ -35,7 +35,7 @@ export function ModelsPage() {
   const [trLoading, setTrLoading] = useState(false);
   const [f, setF] = useState({ name: "", task_type: "classification", description: "" });
   const reload = () => listModelsPaged({ page, page_size: pageSize }).then(res => { setItems(res.items); setTotal(res.total); });
-  useEffect(() => { reload().finally(() => setLoading(false)); }, [page, pageSize]);
+  useEffect(() => { setLoading(true); reload().finally(() => setLoading(false)); }, [page, pageSize]);
 
   const openDetail = (m: Model) => {
     setDetail(m); setTrainings([]); setTrLoading(true);

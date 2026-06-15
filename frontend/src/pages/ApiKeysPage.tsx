@@ -32,7 +32,7 @@ export function ApiKeysPage() {
     toastSuccess(k.plaintext ? "已复制完整 Key" : "该 Key 创建较早无明文,仅复制了前缀");
   };
   const reload = () => listApiKeysPaged({ page, page_size: pageSize }).then(res => { setKeys(res.items); setTotal(res.total); });
-  useEffect(() => { reload().finally(() => setLoading(false)); }, [page, pageSize]);
+  useEffect(() => { setLoading(true); reload().finally(() => setLoading(false)); }, [page, pageSize]);
 
   const openDrawer = () => { setName(""); setScopes([]); setBusy(false); setOpen(true); };
   const toggle = (c: string) => setScopes(s => s.includes(c) ? s.filter(x => x !== c) : [...s, c]);

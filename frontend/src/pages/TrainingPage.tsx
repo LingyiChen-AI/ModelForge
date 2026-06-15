@@ -81,7 +81,7 @@ export function TrainingPage() {
     listModels().then(setModels);
     getConfig().then(c => setMlflowUrl(c.mlflow_url)).catch(() => {});
   }, []);
-  useEffect(() => { reload().finally(() => setLoading(false)); const t = setInterval(reload, 3000); return () => clearInterval(t); }, [page, pageSize]);
+  useEffect(() => { setLoading(true); reload().finally(() => setLoading(false)); const t = setInterval(reload, 3000); return () => clearInterval(t); }, [page, pageSize]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);

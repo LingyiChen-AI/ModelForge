@@ -20,7 +20,7 @@ export function RolesPage() {
   const [scope, setScope] = useState("own");
   const [sel, setSel] = useState<string[]>([]);
   const reload = () => Promise.all([listRolesPaged({ page, page_size: pageSize }).then(res => { setRoles(res.items); setTotal(res.total); }), listPermissions().then(setPerms)]);
-  useEffect(() => { reload().finally(() => setLoading(false)); }, [page, pageSize]);
+  useEffect(() => { setLoading(true); reload().finally(() => setLoading(false)); }, [page, pageSize]);
 
   const toggle = (c: string) => setSel(s => s.includes(c) ? s.filter(x => x !== c) : [...s, c]);
   const selectable = perms.filter(p => p.code !== "*");

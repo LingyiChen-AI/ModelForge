@@ -45,7 +45,7 @@ export function DeployPage() {
   const [apiDoc, setApiDoc] = useState<ApiDoc | null>(null);
   const reload = () => listDeploymentsPaged({ page, page_size: pageSize }).then(res => { setItems(res.items); setTotal(res.total); });
   useEffect(() => { listModelVersions().then(setModels); }, []);
-  useEffect(() => { reload().finally(() => setLoading(false)); const t = setInterval(reload, 3000); return () => clearInterval(t); }, [page, pageSize]);
+  useEffect(() => { setLoading(true); reload().finally(() => setLoading(false)); const t = setInterval(reload, 3000); return () => clearInterval(t); }, [page, pageSize]);
 
   const openDrawer = () => { setMvId(""); setBusy(false); setOpen(true); };
   const submit = () => {

@@ -29,7 +29,7 @@ export function EvalPage() {
   const [delBusy, setDelBusy] = useState(false);
   const reload = () => listEvalRunsPaged({ page, page_size: pageSize, ...(filterDv ? { dataset_version_id: Number(filterDv) } : {}) }).then(res => { setRuns(res.items); setTotal(res.total); });
   useEffect(() => { listModelVersions().then(setModels); listVersionOptions("test").then(setEvalVersions); }, []);
-  useEffect(() => { reload().finally(() => setLoading(false)); const t = setInterval(reload, 3000); return () => clearInterval(t); }, [page, pageSize, filterDv]);
+  useEffect(() => { setLoading(true); reload().finally(() => setLoading(false)); const t = setInterval(reload, 3000); return () => clearInterval(t); }, [page, pageSize, filterDv]);
 
   const openDrawer = () => { setMvId(""); setFormDv(""); setBusy(false); setOpen(true); };
   // test set is linked to the chosen model version's task type

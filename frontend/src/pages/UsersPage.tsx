@@ -19,7 +19,7 @@ export function UsersPage() {
   const [pwBusy, setPwBusy] = useState(false);
   const [f, setF] = useState({ name: "", email: "", password: "", role_id: "" });
   const reload = () => Promise.all([listUsersPaged({ page, page_size: pageSize }).then(res => { setUsers(res.items); setTotal(res.total); }), listRoles().then(setRoles)]);
-  useEffect(() => { reload().finally(() => setLoading(false)); }, [page, pageSize]);
+  useEffect(() => { setLoading(true); reload().finally(() => setLoading(false)); }, [page, pageSize]);
 
   const openDrawer = () => { setF({ name: "", email: "", password: "", role_id: "" }); setBusy(false); setOpen(true); };
   const create = () => {

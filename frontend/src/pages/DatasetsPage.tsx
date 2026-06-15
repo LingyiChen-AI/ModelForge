@@ -29,7 +29,7 @@ export function DatasetsPage() {
   const [kind, setKind] = useState("train");
   const [taskType, setTaskType] = useState("classification");
   const reload = () => listDatasetsPaged({ page, page_size: pageSize }).then(res => { setItems(res.items); setTotal(res.total); });
-  useEffect(() => { reload().finally(() => setLoading(false)); }, [page, pageSize]);
+  useEffect(() => { setLoading(true); reload().finally(() => setLoading(false)); }, [page, pageSize]);
 
   const openDrawer = () => { setName(""); setKind("train"); setTaskType("classification"); setBusy(false); setOpen(true); };
   const create = () => {
