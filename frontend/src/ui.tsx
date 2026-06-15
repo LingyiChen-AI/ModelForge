@@ -116,8 +116,8 @@ export function StatusBadge({ status, error }: { status: string; error?: string 
   const tone = STATUS_TONE[status?.toLowerCase()] ?? "gray";
   const badge = <Badge tone={tone} dot>{status}</Badge>;
   if (!error) return badge;
-  // failed states: keep the row clean — surface the error only on hover
-  return <Tooltip content={error}><span className="border-b border-dotted border-red-300">{badge}</span></Tooltip>;
+  // keep the row clean — same look as other badges, surface the hint/error only on hover
+  return <Tooltip content={error}><span className="cursor-help">{badge}</span></Tooltip>;
 }
 
 export function Spinner({ className }: { className?: string }) {
@@ -126,7 +126,7 @@ export function Spinner({ className }: { className?: string }) {
 
 export function PageHeader({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: ReactNode }) {
   return (
-    <div className="flex flex-wrap items-end justify-between gap-3 mb-6">
+    <div className="flex flex-wrap items-end justify-between gap-3 mb-4">
       <div>
         <h1 className="text-[22px] leading-7 text-slate-900">{title}</h1>
         {subtitle && <p className="mt-1 text-[13px] text-slate-500">{subtitle}</p>}
