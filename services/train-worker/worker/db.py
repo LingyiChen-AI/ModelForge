@@ -75,6 +75,7 @@ def load_job(engine: Engine, job_id: int) -> dict:
             eval_ids = [row["eval_dataset_version_id"]]
         row["storage_uris"] = _storage_uris(c, train_ids) or [row["storage_uri"]]
         row["eval_storage_uris"] = _storage_uris(c, eval_ids)
+        row["train_version_ids"] = train_ids
         return row
 
 
@@ -98,6 +99,33 @@ def set_eval_progress(engine: Engine, eval_run_id: int, progress: float) -> None
     with engine.begin() as c:
         c.execute(text("UPDATE eval_runs SET progress = :p WHERE id = :id"),
                   {"p": max(0.0, min(1.0, float(progress))), "id": eval_run_id})
+
+
+def _as_json(v):
+    if isinstance(v, (dict, list)) or v is None:
+        return v
+    try:
+        return json.loads(v)
+    except (TypeError, ValueError):
+        return v
+
+
+def load_trained_badcases(engine: Engine, version_ids: list[int]) -> list[dict]:
+    """Annotated badcases whose dataset_version is in `version_ids` (i.e. were in this
+    training set). Returns [{id, input, annotation}] with JSON parsed."""
+    if not version_ids:
+        return []
+    with engine.connect() as c:
+        rows = c.execute(text(
+            "SELECT id, input, annotation FROM badcases "
+            "WHERE dataset_version_id IN :ids AND annotation IS NOT NULL"
+        ).bindparams(bindparam("ids", expanding=True)), {"ids": version_ids}).mappings().all()
+    out = []
+    for r in rows:
+        out.append({"id": r["id"],
+                    "input": _as_json(r["input"]),
+                    "annotation": _as_json(r["annotation"])})
+    return out
 
 
 def load_eval_run(engine: Engine, eval_run_id: int) -> dict:

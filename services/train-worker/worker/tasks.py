@@ -1,4 +1,4 @@
-import json, re, tempfile
+import json, logging, re, tempfile
 import mlflow
 from mlflow.tracking import MlflowClient
 import requests
@@ -7,12 +7,17 @@ from worker.celery_app import celery_app
 from modelforge_common.task_names import TRAIN_TASK, EVAL_TASK
 from modelforge_common.enums import JobStatus
 from worker.db import (build_engine, set_job_status, set_job_progress, load_job,
-                       set_eval_status, set_eval_progress, load_eval_run)
+                       set_eval_status, set_eval_progress, load_eval_run,
+                       load_trained_badcases)
+from worker import badcase_scoring
 from worker.storage import read_snapshot
 from worker.recipes import get_recipe
 from worker.mlflow_utils import _configure_mlflow_s3_env
 from worker.model_loader import download_model
 from worker.evaluators import get_evaluator
+
+
+logger = logging.getLogger(__name__)
 
 
 def _mlflow_metrics(metrics: dict) -> dict:
@@ -61,12 +66,13 @@ def _register_run_model(run_id: str, model_name: str) -> str:
 
 
 def report_result(training_job_id: int, run_id: str, model_name: str,
-                  version: str, metrics: dict) -> None:
+                  version: str, metrics: dict, badcase_fixes: list | None = None) -> None:
     requests.post(
         f"{settings.app_server_url}/training-jobs/internal/{training_job_id}/result",
         json={"run_id": run_id, "model_name": model_name, "version": version,
               "metrics": {k: float(v) for k, v in metrics.items()
-                          if isinstance(v, (int, float))}},
+                          if isinstance(v, (int, float))},
+              "badcase_fixes": badcase_fixes or []},
         headers={"X-Internal-Token": settings.internal_token}, timeout=10)
 
 
@@ -89,6 +95,7 @@ def train_task(self, training_job_id: int):
         mlflow.set_tracking_uri(settings.mlflow_tracking_uri)
         # register under the bound model container's name so versions accumulate
         model_name = job.get("model_name") or job["name"]
+        badcase_fixes = []
         with tempfile.TemporaryDirectory() as out:
             # Run created BEFORE training so step metrics stream live and the UI
             # can deep-link to the MLflow run while it is still running.
@@ -103,10 +110,24 @@ def train_task(self, training_job_id: int):
                 mlflow.log_metrics(_mlflow_metrics(result.metrics))
                 mlflow.log_artifacts(result.artifact_dir, artifact_path="model")
                 version = _register_run_model(run_id, model_name)
+                try:
+                    bc_rows = load_trained_badcases(engine, job.get("train_version_ids") or [])
+                    if bc_rows:
+                        fixed = badcase_scoring.score(
+                            job["task_type"], result.artifact_dir,
+                            [{"input": r["input"], "annotation": r["annotation"]} for r in bc_rows])
+                        if fixed:
+                            result.metrics["badcase_fix_rate"] = float(sum(fixed)) / len(fixed)
+                            mlflow.log_metrics(_mlflow_metrics({"badcase_fix_rate": result.metrics["badcase_fix_rate"]}))
+                            badcase_fixes = [r["id"] for r, ok in zip(bc_rows, fixed) if ok]
+                except Exception:
+                    logger.warning("badcase scoring failed; skipping fix writeback", exc_info=True)
+                    badcase_fixes = []  # scoring is best-effort; never fail a successful training
         set_job_progress(engine, training_job_id, 1.0)
         set_job_status(engine, training_job_id, JobStatus.SUCCEEDED, mlflow_run_id=run_id)
         try:
-            report_result(training_job_id, run_id, model_name, str(version), result.metrics)
+            report_result(training_job_id, run_id, model_name, str(version), result.metrics,
+                          badcase_fixes=badcase_fixes)
         except Exception:
             pass  # callback is best-effort; job already succeeded and is recorded in DB
         return {"run_id": run_id, "model_name": model_name, "version": str(version),
