@@ -14,6 +14,16 @@ const STAGE: Record<string, { label: string; tone: "gray" | "amber" | "green" }>
   archived: { label: "已归档", tone: "gray" },
 };
 
+const METRIC_LABEL: Record<string, string> = {
+  badcase_fix_rate: "badcase 修复率",
+  accuracy: "准确率", precision: "精确率", recall: "召回率", f1: "F1",
+};
+function fmtMetric(k: string, v: number | string): string {
+  if (typeof v !== "number") return String(v);
+  if (k === "badcase_fix_rate" || k.startsWith("recall@")) return (v * 100).toFixed(1) + "%";
+  return Number.isInteger(v) ? String(v) : v.toFixed(3);
+}
+
 function Metrics({ data }: { data: Record<string, number> }) {
   const entries = Object.entries(data || {});
   if (!entries.length) return <span className="text-slate-300">—</span>;
@@ -21,7 +31,7 @@ function Metrics({ data }: { data: Record<string, number> }) {
     <div className="flex flex-wrap gap-1.5">
       {entries.slice(0, 5).map(([k, v]) => (
         <span key={k} className="rounded-md bg-slate-100 px-1.5 py-0.5 font-mono text-[11.5px] text-slate-600">
-          {k}=<span className="text-slate-900">{typeof v === "number" ? (Number.isInteger(v) ? v : v.toFixed(3)) : String(v)}</span>
+          {METRIC_LABEL[k] ?? k}=<span className="text-slate-900">{fmtMetric(k, v)}</span>
         </span>
       ))}
     </div>
