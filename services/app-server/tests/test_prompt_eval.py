@@ -294,3 +294,35 @@ def test_stats_multi_and_single(session_factory):
     assert s2["good"] == 1 and s2["bad"] == 0
     assert s2["comparison"]["improved"] == 1 and s2["comparison"]["regressed"] == 0
     assert s2["comparison"]["comparable"] == 1
+
+
+def test_verdict_and_stats_api(session_factory):
+    db = session_factory()
+    run, arms, it = _seed_eval_run(db, "multi_prompt", 2)
+    rid, aid, iid = run.id, arms[0].id, it.id
+    u = make_user(db, codes=("prompteval:read", "prompteval:annotate"), data_scope="all", email="jg@x.com")
+    H = auth_headers(u.id); db.close()
+    from app.main import app
+    from fastapi.testclient import TestClient
+    c = TestClient(app)
+    r = c.patch(f"/prompt-evals/items/{iid}/verdict", json={"winner_arm_id": aid}, headers=H)
+    assert r.status_code == 200 and r.json()["winner_arm_id"] == aid
+    assert c.patch(f"/prompt-evals/items/{iid}/verdict", json={"is_good": True}, headers=H).status_code == 422
+    ev = c.get(f"/prompt-evals/{rid}/items?bucket=evaluated", headers=H).json()
+    assert any(x["id"] == iid and x["winner_arm_id"] == aid for x in ev)
+    pend = c.get(f"/prompt-evals/{rid}/items?bucket=pending", headers=H).json()
+    assert all(x["id"] != iid for x in pend)
+    s = c.get(f"/prompt-evals/{rid}/stats", headers=H).json()
+    assert s["evaluated"] == 1 and s["best_arm_id"] == aid
+
+
+def test_verdict_requires_perm(session_factory):
+    db = session_factory()
+    run, arms, it = _seed_eval_run(db, "multi_prompt", 2)
+    iid, aid = it.id, arms[0].id
+    u = make_user(db, codes=("prompteval:read",), data_scope="all", email="ro@x.com")
+    H = auth_headers(u.id); db.close()
+    from app.main import app
+    from fastapi.testclient import TestClient
+    c = TestClient(app)
+    assert c.patch(f"/prompt-evals/items/{iid}/verdict", json={"winner_arm_id": aid}, headers=H).status_code == 403
