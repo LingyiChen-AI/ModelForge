@@ -12,6 +12,7 @@ import { ApiKeysPage } from "./pages/ApiKeysPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { BadcasePage } from "./pages/BadcasePage";
 import { BadcaseAnnotateWorkbench } from "./pages/BadcaseAnnotateWorkbench";
+import { PromptsPage } from "./pages/PromptsPage";
 import { useAuth } from "./context/AuthContext";
 import { AppShell } from "./components/AppShell";
 import { Spinner } from "./ui";
@@ -43,6 +44,7 @@ export default function App() {
   else if (path === "/roles") page = <RolesPage />;
   else if (path === "/api-keys") page = <ApiKeysPage />;
   else if (path === "/settings") page = <SettingsPage />;
+  else if (path === "/prompts") page = <PromptsPage />;
   else if (/^\/badcase\/annotate\/\d+$/.test(path)) {
     page = <BadcaseAnnotateWorkbench modelVersionId={Number(path.split("/")[3])} />;
   }
