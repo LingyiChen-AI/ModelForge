@@ -159,6 +159,7 @@ export type Badcase = {
   status: string;
   annotation: Record<string, any> | null;
   dataset_version_id: number | null;
+  fixed_by: { model_version_id: number; version_label: string; at?: string }[];
   created_at: string;
 };
 export const listBadcases = (p?: { model_version_id?: number; status?: string; category?: string }) =>
@@ -172,3 +173,17 @@ export const buildBadcaseDataset = (badcase_ids: number[], name?: string) =>
     { badcase_ids, name },
   ).then(r => r.data);
 export const listBadcaseRules = () => api.get<{ rules: any[] }>("/badcase/rules").then(r => r.data.rules);
+export type BadcaseSummary = {
+  model_version_id: number;
+  model_name: string | null;
+  model_version_label: string | null;
+  task_type: string;
+  reported: number;
+  annotated: number;
+  used: number;
+  pending: number;
+  fixed: number;
+  fixed_versions: string[];
+};
+export const listBadcaseSummary = () =>
+  api.get<BadcaseSummary[]>("/badcases/summary").then(r => r.data);
