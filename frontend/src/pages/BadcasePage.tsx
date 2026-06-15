@@ -1,26 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
-import { Bug, Database, BookText } from "lucide-react";
-import { listBadcases, buildBadcaseDataset, listBadcaseRules, type Badcase } from "../api/client";
-import { Badge, Button, Drawer, EmptyState, PageHeader, Select, StatusBadge, TableShell } from "../ui";
-import { toastError, toastSuccess } from "../toast";
+import { useEffect, useState } from "react";
+import { Bug, BookText, PencilLine } from "lucide-react";
+import { listBadcaseSummary, listBadcaseRules, type BadcaseSummary } from "../api/client";
+import { Badge, Button, Drawer, EmptyState, PageHeader, TableShell } from "../ui";
+import { toastError } from "../toast";
 import { navigate } from "../router";
-import { BadcaseAnnotateDrawer } from "./BadcaseAnnotateDrawer";
 
-const STATUS_OPTIONS = [
-  { v: "", l: "全部状态" },
-  { v: "reported", l: "待标注" },
-  { v: "annotated", l: "已标注" },
-  { v: "used", l: "已用" },
-];
-const TASK_LABEL: Record<string, string> = { classification: "分类", ner: "序列标注", pair: "句对", embedding: "向量检索" };
+const TASK_LABEL: Record<string, string> = {
+  classification: "分类", ner: "序列标注", pair: "句对", embedding: "向量检索",
+};
 
 export function BadcasePage() {
-  const [items, setItems] = useState<Badcase[]>([]);
+  const [rows, setRows] = useState<BadcaseSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [status, setStatus] = useState("");
-  const [sel, setSel] = useState<number[]>([]);
-  const [anno, setAnno] = useState<Badcase | null>(null);
-  const [busy, setBusy] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [rules, setRules] = useState<any[]>([]);
 
@@ -29,180 +20,75 @@ export function BadcasePage() {
     if (rules.length === 0) listBadcaseRules().then(setRules).catch(() => toastError("加载规则失败"));
   };
 
-  const reload = () =>
-    listBadcases(status ? { status } : undefined).then(setItems);
-
   useEffect(() => {
     setLoading(true);
-    reload().finally(() => setLoading(false));
-  }, [status]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const groups = useMemo(() => {
-    const m = new Map<string, Badcase[]>();
-    for (const b of items) {
-      const k = `${b.model_name ?? b.model_version_id} · V${b.model_version_label ?? "?"}`;
-      if (!m.has(k)) m.set(k, []);
-      m.get(k)!.push(b);
-    }
-    return [...m.entries()];
-  }, [items]);
-
-  const toggle = (id: number) =>
-    setSel(s => (s.includes(id) ? s.filter(x => x !== id) : [...s, id]));
-
-  const selected = items.filter(b => sel.includes(b.id));
-  const canBuild =
-    selected.length > 0 &&
-    selected.every(b => b.status === "annotated" || b.annotation != null) &&
-    new Set(selected.map(b => b.task_type)).size === 1;
-
-  const build = () => {
-    setBusy(true);
-    buildBadcaseDataset(sel)
-      .then(res => {
-        toastSuccess(`已生成训练集 ${res.dataset_name}(${res.row_count} 行)`);
-        setSel([]);
-        reload();
-        navigate(`/training?badcase_version=${res.version_id}`);
-      })
-      .catch(() => toastError("生成失败(需都已标注且同一类型)"))
-      .finally(() => setBusy(false));
-  };
+    listBadcaseSummary().then(setRows).catch(() => toastError("加载失败")).finally(() => setLoading(false));
+  }, []);
 
   return (
-    <>
+    <div>
       <PageHeader
         title="Badcase"
-        subtitle="外部上报的坏例按模型版本自动归类;标注后可一键生成 badcase- 训练集并去修复。"
-        actions={
-          <Button variant="primary" disabled={!canBuild} loading={busy} onClick={build}>
-            <Database size={16} /> 生成训练集并去修复 ({sel.length})
-          </Button>
-        }
+        subtitle="按模型版本汇总上报的坏例;点「标注」进入工作台逐条标注,标注后可生成 badcase- 训练集修复。"
+        actions={<Button variant="subtle" onClick={openRules}><BookText size={16} /> 查看上报规则</Button>}
       />
 
-      <div className="mb-4 flex items-center gap-2.5">
-        <Button onClick={openRules}><BookText size={15} /> 查看上报规则</Button>
-        <span className="ml-2 text-[13px] text-slate-500">状态</span>
-        <Select
-          className="h-9 w-40"
-          value={status}
-          onChange={e => setStatus(e.target.value)}
-        >
-          {STATUS_OPTIONS.map(s => (
-            <option key={s.v} value={s.v}>
-              {s.l}
-            </option>
-          ))}
-        </Select>
-      </div>
-
-      {items.length === 0 && !loading ? (
-        <EmptyState
-          icon={<Bug size={22} />}
-          title="还没有 Badcase"
-          hint="外部业务通过 API 上报后会自动出现在这里。"
-        />
+      {loading ? null : rows.length === 0 ? (
+        <EmptyState icon={<Bug size={20} />} title="暂无 badcase" hint="通过 API 上报后,这里按模型版本归类。" />
       ) : (
-        groups.map(([title, rows]) => (
-          <div key={title} className="mb-5">
-            <div className="mb-2 flex items-center gap-2 text-[14px] font-medium text-slate-800">
-              <Bug size={15} className="text-slate-400" />
-              {title}
-              <span className="text-slate-400">({rows.length})</span>
-            </div>
-            <TableShell
-              head={
-                <>
-                  <th className="w-10"></th>
-                  <th className="w-14">#</th>
-                  <th>输入</th>
-                  <th>模型推理</th>
-                  <th>状态</th>
-                  <th>标注</th>
-                  <th className="w-24 text-right"></th>
-                </>
-              }
-              empty={false}
-              loading={false}
-            >
-              {rows.map(b => (
-                <tr key={b.id}>
-                  <td>
-                    <input
-                      type="checkbox"
-                      className="accent-brand-500"
-                      checked={sel.includes(b.id)}
-                      onChange={() => toggle(b.id)}
-                    />
-                  </td>
-                  <td className="font-mono text-slate-400">{b.id}</td>
-                  <td className="max-w-xs truncate text-slate-700">
-                    {JSON.stringify(b.input)}
-                  </td>
-                  <td className="max-w-xs truncate text-slate-500">
-                    {JSON.stringify(b.inference)}
-                  </td>
-                  <td>
-                    <StatusBadge status={b.status} />
-                  </td>
-                  <td className="max-w-[160px] truncate text-slate-500">
-                    {b.annotation ? (
-                      JSON.stringify(b.annotation)
-                    ) : (
-                      <span className="text-slate-300">—</span>
-                    )}
-                  </td>
-                  <td className="text-right">
-                    <Button size="sm" onClick={() => setAnno(b)}>
-                      标注
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </TableShell>
-          </div>
-        ))
+        <TableShell
+          loading={false}
+          empty={false}
+          head={
+            <><th className="px-4 py-2.5 text-left font-medium">模型</th>
+            <th className="px-4 py-2.5 text-left font-medium">类型</th>
+            <th className="px-4 py-2.5 text-left font-medium">上报</th>
+            <th className="px-4 py-2.5 text-left font-medium">已标注</th>
+            <th className="px-4 py-2.5 text-left font-medium">已生成训练集</th>
+            <th className="px-4 py-2.5 text-left font-medium">已修复</th>
+            <th className="px-4 py-2.5 text-right font-medium">操作</th></>
+          }
+        >
+          {rows.map(r => (
+            <tr key={r.model_version_id} className="border-t border-slate-100">
+              <td className="px-4 py-3">
+                <span className="font-medium text-slate-800">{r.model_name ?? r.model_version_id}</span>
+                <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11.5px] text-slate-600">V{r.model_version_label ?? "?"}</span>
+              </td>
+              <td className="px-4 py-3"><Badge tone="gray">{TASK_LABEL[r.task_type] ?? r.task_type}</Badge></td>
+              <td className="px-4 py-3 text-slate-700">{r.reported}</td>
+              <td className="px-4 py-3 text-slate-700">{r.annotated}{r.pending > 0 && <span className="ml-1 text-[12px] text-amber-600">(待 {r.pending})</span>}</td>
+              <td className="px-4 py-3 text-slate-700">{r.used}</td>
+              <td className="px-4 py-3">
+                {r.fixed > 0 ? (
+                  <div className="flex flex-wrap items-center gap-1">
+                    {r.fixed_versions.map(v => <Badge key={v} tone="green">V{v} 已修复</Badge>)}
+                    <span className="text-[12px] text-slate-500">共 {r.fixed}</span>
+                  </div>
+                ) : <span className="text-slate-400">—</span>}
+              </td>
+              <td className="px-4 py-3 text-right">
+                <Button size="sm" variant="primary" onClick={() => navigate(`/badcase/annotate/${r.model_version_id}`)}>
+                  <PencilLine size={14} /> 标注
+                </Button>
+              </td>
+            </tr>
+          ))}
+        </TableShell>
       )}
 
-      <BadcaseAnnotateDrawer
-        badcase={anno}
-        onClose={() => setAnno(null)}
-        onSaved={() => {
-          setAnno(null);
-          reload();
-        }}
-      />
-
-      <Drawer
-        open={rulesOpen}
-        onClose={() => setRulesOpen(false)}
-        title="上报规则"
-        subtitle="每种模型类型的 Badcase 上报契约;外部业务用带 badcase:report 的 API Key 调用 POST /badcase/report。"
-        width="max-w-2xl"
-      >
+      <Drawer open={rulesOpen} onClose={() => setRulesOpen(false)} title="上报规则" subtitle="各任务类型的上报字段契约与示例。">
         <div className="flex flex-col gap-4">
-          {rules.map(r => (
-            <div key={r.task_type} className="rounded-xl border border-slate-200 bg-white p-4">
-              <div className="mb-3 flex items-center gap-2">
-                <Badge tone="blue">{TASK_LABEL[r.task_type] ?? r.task_type}</Badge>
-                <span className="font-mono text-[12px] text-slate-500">{r.task_type}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-4 text-[12.5px]">
-                <div><div className="label mb-1">input 字段</div><div className="font-mono text-slate-600">{(r.input_keys ?? []).join(", ")}</div></div>
-                <div><div className="label mb-1">annotation 字段(系统内标注)</div><div className="font-mono text-slate-600">{(r.annotation_keys ?? []).join(", ")}</div></div>
-              </div>
-              <div className="mt-3">
-                <div className="label mb-1">上报示例</div>
-                <pre className="overflow-x-auto rounded-lg bg-slate-900 p-3 font-mono text-[11px] text-slate-100">{`curl -X POST '$API/badcase/report' \\
-  -H 'Content-Type: application/json' \\
-  -H 'X-Api-Key: <badcase:report key>' \\
-  -d '${JSON.stringify({ model_version_id: 1, input: r.example?.input, inference: r.example?.inference })}'`}</pre>
-              </div>
+          {rules.map((r: any) => (
+            <div key={r.task_type} className="rounded-lg border border-slate-200 p-3">
+              <div className="mb-1.5 font-medium text-slate-800">{TASK_LABEL[r.task_type] ?? r.task_type}</div>
+              <div className="text-[12px] text-slate-500">input 字段:<span className="font-mono">{(r.input_keys ?? []).join(", ")}</span></div>
+              <div className="text-[12px] text-slate-500">标注字段:<span className="font-mono">{(r.annotation_keys ?? []).join(", ")}</span></div>
+              <pre className="mt-2 rounded bg-slate-50 p-2 font-mono text-[11.5px] text-slate-600 whitespace-pre-wrap break-all">{JSON.stringify(r.example, null, 2)}</pre>
             </div>
           ))}
         </div>
       </Drawer>
-    </>
+    </div>
   );
 }
