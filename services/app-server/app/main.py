@@ -70,3 +70,6 @@ app.include_router(api_keys.router)
 
 from app.api import badcase
 app.include_router(badcase.router)
+
+from app.api import llm
+app.include_router(llm.router)

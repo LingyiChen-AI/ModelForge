@@ -94,3 +94,51 @@ def test_service_test_model(session_factory, monkeypatch):
     assert bad["ok"] is False and bad["reply"] is None and bad["error"] == "unauthorized"
     # 不存在的 model
     assert svc.test_model(db, 99999) is None
+
+
+from fastapi.testclient import TestClient
+
+
+def _client_with(session_factory, codes):
+    from app import db as dbmod  # noqa: F401
+    db = session_factory()
+    u = make_user(db, codes=codes, data_scope="all", email="llm@x.com"); db.close()
+    from app.main import app
+    return TestClient(app), auth_headers(u.id)
+
+
+def test_llm_api_crud_and_mask(session_factory, monkeypatch):
+    import app.services.llm_provider_service as svc
+    from modelforge_common.llm_client import ChatResult
+    c, H = _client_with(session_factory, ("llm:manage",))
+    # create
+    r = c.post("/llm/providers", json={"name": "openai", "base_url": "https://api.x/v1",
+               "api_key": "sk-secret-7777", "model_ids": ["gpt-4o-mini"]}, headers=H)
+    assert r.status_code == 201
+    body = r.json()
+    pid = body["id"]
+    assert body["masked_key"] == "sk-…7777" and "api_key" not in body
+    assert body["models"][0]["model_id"] == "gpt-4o-mini"
+    mid = body["models"][0]["id"]
+    # list
+    listed = c.get("/llm/providers", headers=H).json()
+    assert listed and listed[0]["masked_key"] == "sk-…7777"
+    # patch: 留空不改 key,改 enabled
+    c.patch(f"/llm/providers/{pid}", json={"enabled": False, "api_key": ""}, headers=H)
+    assert c.get("/llm/providers", headers=H).json()[0]["enabled"] is False
+    # add model + 重复 422
+    assert c.post(f"/llm/providers/{pid}/models", json={"model_id": "gpt-4o"}, headers=H).status_code == 201
+    assert c.post(f"/llm/providers/{pid}/models", json={"model_id": "gpt-4o"}, headers=H).status_code == 422
+    # test endpoint(mock client)
+    monkeypatch.setattr(svc, "llm_chat", lambda *a, **k: ChatResult(content="2", usage=None, raw={}))
+    tr = c.post(f"/llm/models/{mid}/test", headers=H).json()
+    assert tr["ok"] is True and tr["reply"] == "2"
+    # delete model + provider
+    assert c.delete(f"/llm/models/{mid}", headers=H).status_code == 200
+    assert c.delete(f"/llm/providers/{pid}", headers=H).status_code == 200
+    assert c.delete(f"/llm/providers/{pid}", headers=H).status_code == 404
+
+
+def test_llm_api_requires_perm(session_factory):
+    c, H = _client_with(session_factory, ("dataset:read",))
+    assert c.get("/llm/providers", headers=H).status_code == 403
