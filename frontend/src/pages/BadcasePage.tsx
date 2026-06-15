@@ -33,23 +33,23 @@ export function BadcasePage() {
         actions={<Button variant="subtle" onClick={openRules}><BookText size={16} /> 查看上报规则</Button>}
       />
 
-      {loading ? null : rows.length === 0 ? (
-        <EmptyState icon={<Bug size={20} />} title="暂无 badcase" hint="通过 API 上报后,这里按模型版本归类。" />
-      ) : (
-        <TableShell
-          loading={false}
-          empty={false}
-          head={
-            <><th className="px-4 py-2.5 text-left font-medium">模型</th>
-            <th className="px-4 py-2.5 text-left font-medium">类型</th>
-            <th className="px-4 py-2.5 text-left font-medium">上报</th>
-            <th className="px-4 py-2.5 text-left font-medium">已标注</th>
-            <th className="px-4 py-2.5 text-left font-medium">已生成训练集</th>
-            <th className="px-4 py-2.5 text-left font-medium">已修复</th>
-            <th className="px-4 py-2.5 text-right font-medium">操作</th></>
-          }
-        >
-          {rows.map(r => (
+      <TableShell
+        loading={loading}
+        empty={rows.length === 0}
+        head={
+          <><th className="px-4 py-2.5 text-left font-medium">模型</th>
+          <th className="px-4 py-2.5 text-left font-medium">类型</th>
+          <th className="px-4 py-2.5 text-left font-medium">上报</th>
+          <th className="px-4 py-2.5 text-left font-medium">已标注</th>
+          <th className="px-4 py-2.5 text-left font-medium">已生成训练集</th>
+          <th className="px-4 py-2.5 text-left font-medium">已修复</th>
+          <th className="px-4 py-2.5 text-right font-medium">操作</th></>
+        }
+      >
+        {rows.length === 0 ? (
+          <EmptyState icon={<Bug size={20} />} title="暂无 badcase" hint="通过 API 上报后,这里按模型版本归类。" />
+        ) : (
+          rows.map(r => (
             <tr key={r.model_version_id} className="border-t border-slate-100">
               <td className="px-4 py-3">
                 <span className="font-medium text-slate-800">{r.model_name ?? r.model_version_id}</span>
@@ -73,9 +73,9 @@ export function BadcasePage() {
                 </Button>
               </td>
             </tr>
-          ))}
-        </TableShell>
-      )}
+          ))
+        )}
+      </TableShell>
 
       <Drawer open={rulesOpen} onClose={() => setRulesOpen(false)} title="上报规则" subtitle="各任务类型的上报字段契约与示例。">
         <div className="flex flex-col gap-4">

@@ -55,26 +55,33 @@ def annotate(db: Session, case_id: int, annotation: dict, user_id: int) -> Badca
 
 
 def summary(db: Session) -> list[dict]:
-    cases = list(db.execute(select(Badcase)).scalars())
+    # Select only the columns we aggregate + the model name/version via a LEFT JOIN.
+    # Avoids hydrating full Badcase ORM rows (big input/inference/annotation JSON) and the
+    # cascading selectin relationship loads (ModelVersion -> dataset_version -> dataset).
+    rows = db.execute(
+        select(Badcase.model_version_id, Badcase.status, Badcase.task_type, Badcase.fixed_by,
+               ModelVersion.name, ModelVersion.mlflow_version)
+        .join(ModelVersion, ModelVersion.id == Badcase.model_version_id, isouter=True)
+    ).all()
     by: dict[int, dict] = {}
-    for c in cases:
-        s = by.setdefault(c.model_version_id, {
-            "model_version_id": c.model_version_id,
-            "model_name": c.model_name,
-            "model_version_label": c.model_version_label,
-            "task_type": c.task_type,
+    for mv_id, status, task_type, fixed_by, model_name, model_version_label in rows:
+        s = by.setdefault(mv_id, {
+            "model_version_id": mv_id,
+            "model_name": model_name,
+            "model_version_label": model_version_label,
+            "task_type": task_type,
             "reported": 0, "annotated": 0, "used": 0, "pending": 0, "fixed": 0,
             "_versions": set()})
         s["reported"] += 1
-        if c.status in ("annotated", "used"):
+        if status in ("annotated", "used"):
             s["annotated"] += 1
-        if c.status == "used":
+        if status == "used":
             s["used"] += 1
-        if c.status == "reported":
+        if status == "reported":
             s["pending"] += 1
-        if c.fixed_by:
+        if fixed_by:
             s["fixed"] += 1
-            for e in c.fixed_by:
+            for e in fixed_by:
                 if e.get("version_label"):
                     s["_versions"].add(str(e["version_label"]))
     out = []
