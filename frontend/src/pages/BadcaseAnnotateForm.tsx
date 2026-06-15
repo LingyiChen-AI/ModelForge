@@ -1,5 +1,5 @@
 import { type Badcase } from "../api/client";
-import { Button, Field, Input } from "../ui";
+import { Button, Field, Input, Select } from "../ui";
 
 export function annotationValid(t: string, val: Record<string, any>): boolean {
   return Boolean(
@@ -14,10 +14,12 @@ export function BadcaseAnnotateForm({
   badcase,
   val,
   onChange,
+  labelOptions = [],
 }: {
   badcase: Badcase;
   val: Record<string, any>;
   onChange: (v: Record<string, any>) => void;
+  labelOptions?: string[];   // model's label space; classification renders these as a dropdown
 }) {
   const t = badcase.task_type;
   const set = (k: string, v: any) => onChange({ ...val, [k]: v });
@@ -38,13 +40,24 @@ export function BadcaseAnnotateForm({
 
       {t === "classification" && (
         <Field label="正确标签 label">
-          <Input value={val.label ?? ""} onChange={e => set("label", e.target.value)} placeholder="如 售后服务" />
+          {labelOptions.length > 0 ? (
+            <Select value={val.label ?? ""} onChange={e => set("label", e.target.value)}>
+              <option value="">选择标签…</option>
+              {labelOptions.map(l => <option key={l} value={l}>{l}</option>)}
+            </Select>
+          ) : (
+            <Input value={val.label ?? ""} onChange={e => set("label", e.target.value)} placeholder="如 售后服务" />
+          )}
         </Field>
       )}
 
       {t === "pair" && (
-        <Field label="正确标签(1=相似 / 0=不相似)">
-          <Input value={val.label ?? ""} onChange={e => set("label", e.target.value.trim())} placeholder="0 或 1" />
+        <Field label="正确标签(相似 / 不相似)">
+          <Select value={val.label ?? ""} onChange={e => set("label", e.target.value)}>
+            <option value="">选择…</option>
+            <option value="1">1 · 相似</option>
+            <option value="0">0 · 不相似</option>
+          </Select>
         </Field>
       )}
 

@@ -173,6 +173,8 @@ export const buildBadcaseDataset = (badcase_ids: number[], name?: string) =>
     { badcase_ids, name },
   ).then(r => r.data);
 export const listBadcaseRules = () => api.get<{ rules: any[] }>("/badcase/rules").then(r => r.data.rules);
+export const listBadcaseLabels = (model_version_id: number) =>
+  api.get<{ labels: string[] }>("/badcases/labels", { params: { model_version_id } }).then(r => r.data.labels);
 export type BadcaseSummary = {
   model_version_id: number;
   model_name: string | null;

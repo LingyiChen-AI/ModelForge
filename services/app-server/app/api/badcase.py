@@ -47,6 +47,16 @@ def badcase_summary(_: User = Depends(require("badcase:read")), db: Session = De
     return badcase_service.summary(db)
 
 
+@router.get("/badcases/labels")
+def badcase_labels(model_version_id: int, _: User = Depends(require("badcase:read")),
+                   db: Session = Depends(get_db)):
+    """Candidate annotation labels for a model version (for the annotation dropdown)."""
+    try:
+        return {"labels": badcase_service.label_options(db, model_version_id)}
+    except ValueError as e:
+        raise HTTPException(404, str(e))
+
+
 @router.get("/badcases/{case_id}", response_model=BadcaseOut)
 def get_badcase(case_id: int, _: User = Depends(require("badcase:read")),
                 db: Session = Depends(get_db)):

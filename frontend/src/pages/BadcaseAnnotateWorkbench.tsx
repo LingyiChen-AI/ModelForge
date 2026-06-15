@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Check, Database } from "lucide-react";
 import {
-  listBadcases, listBadcaseSummary, annotateBadcase, buildBadcaseDataset,
+  listBadcases, listBadcaseSummary, annotateBadcase, buildBadcaseDataset, listBadcaseLabels,
   type Badcase, type BadcaseSummary,
 } from "../api/client";
 import { Button, PageHeader, EmptyState } from "../ui";
@@ -19,12 +19,14 @@ export function BadcaseAnnotateWorkbench({ modelVersionId }: { modelVersionId: n
   const [val, setVal] = useState<Record<string, any>>({});
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [labelOptions, setLabelOptions] = useState<string[]>([]);
 
   const reloadSummary = () =>
     listBadcaseSummary().then(s => setSum(s.find(x => x.model_version_id === modelVersionId) ?? null));
 
   useEffect(() => {
     setLoading(true);
+    listBadcaseLabels(modelVersionId).then(setLabelOptions).catch(() => setLabelOptions([]));
     Promise.all([
       listBadcases({ model_version_id: modelVersionId, status: "reported" }),
       reloadSummary(),
@@ -88,7 +90,7 @@ export function BadcaseAnnotateWorkbench({ modelVersionId }: { modelVersionId: n
           <div className="mb-3 text-[13px] text-slate-500">
             Badcase #{current.id} · 剩余待标注 {queue.length}
           </div>
-          <BadcaseAnnotateForm badcase={current} val={val} onChange={setVal} />
+          <BadcaseAnnotateForm badcase={current} val={val} onChange={setVal} labelOptions={labelOptions} />
           <div className="mt-5 flex items-center justify-end gap-2">
             <Button variant="subtle" disabled={busy} onClick={() => setQueue(q => [...q.slice(1), q[0]])}>
               跳过

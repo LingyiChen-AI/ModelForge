@@ -194,3 +194,39 @@ def test_annotate_missing_and_ok(session_factory, monkeypatch):
     assert r.status_code == 200 and r.json()["status"] == "annotated" and r.json()["annotation"] == {"label": "售后服务"}
     # invalid annotation (missing required key) -> 422
     assert c.patch(f"/badcases/{cid}/annotate", json={"annotation": {"nope": 1}}, headers=H).status_code == 422
+
+
+def test_label_options_pair_and_classification(tmp_path, monkeypatch):
+    import pandas as pd
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.models import Base
+    from app.models.training import TrainingJob, ModelVersion
+    from app.models.dataset import Dataset, DatasetVersion
+    import app.services.badcase_service as svc
+    eng = create_engine(f"sqlite:///{tmp_path}/l.db"); Base.metadata.create_all(eng)
+    S = sessionmaker(bind=eng, expire_on_commit=False); db = S()
+
+    ds = Dataset(name="意图集", kind="train", task_type="classification"); db.add(ds); db.commit()
+    dv = DatasetVersion(dataset_id=ds.id, version_no=1, storage_uri="s3://x/1.parquet",
+                        row_count=3, checksum="x")
+    db.add(dv); db.commit()
+    job = TrainingJob(name="j", dataset_version_id=dv.id, dataset_version_ids=[dv.id],
+                      base_model="b", task_type="classification", hyperparams={}); db.add(job); db.commit()
+
+    # pair -> fixed 0/1, no snapshot read
+    pair_mv = ModelVersion(name="句对", source_training_job_id=job.id, mlflow_model_name="句对",
+                           mlflow_version="1", task_type="pair", base_model="b", train_metrics={})
+    db.add(pair_mv); db.commit()
+    assert svc.label_options(db, pair_mv.id) == ["0", "1"]
+
+    # classification -> distinct labels from the training snapshot
+    mv = ModelVersion(name="意图", source_training_job_id=job.id, mlflow_model_name="意图",
+                      mlflow_version="1", task_type="classification", base_model="b", train_metrics={})
+    db.add(mv); db.commit()
+
+    class _Store:
+        def read_snapshot(self, uri):
+            return pd.DataFrame({"text": ["a", "b", "c"], "label": ["售后服务", "物流查询", "售后服务"]})
+    monkeypatch.setattr(svc, "build_storage", lambda: _Store())
+    assert svc.label_options(db, mv.id) == ["售后服务", "物流查询"]

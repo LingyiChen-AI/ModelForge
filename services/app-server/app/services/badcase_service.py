@@ -9,6 +9,45 @@ from app.services.dataset_service import create_version
 from app.storage import build_storage
 
 
+def label_options(db: Session, model_version_id: int) -> list[str]:
+    """Candidate annotation labels for a model version = the discrete label space it was
+    trained on. classification -> distinct train `label`s; ner -> distinct `tags`;
+    pair -> ["0","1"]; embedding -> [] (no discrete labels, annotated via pos/neg)."""
+    from app.models.training import TrainingJob
+    from app.models.dataset import DatasetVersion
+    mv = db.get(ModelVersion, model_version_id)
+    if not mv:
+        raise ValueError("model_version not found")
+    if mv.task_type == "pair":
+        return ["0", "1"]
+    if mv.task_type not in ("classification", "ner"):
+        return []
+    job = db.get(TrainingJob, mv.source_training_job_id) if mv.source_training_job_id else None
+    if not job:
+        return []
+    store = build_storage()
+    labels: set[str] = set()
+    for vid in job.train_version_ids:
+        dv = db.get(DatasetVersion, vid)
+        if not dv:
+            continue
+        try:
+            df = store.read_snapshot(dv.storage_uri)
+        except Exception:
+            continue  # missing/unreadable snapshot -> just contributes no labels
+        if mv.task_type == "classification" and "label" in df.columns:
+            labels.update(str(x) for x in df["label"].dropna().tolist())
+        elif mv.task_type == "ner" and "tags" in df.columns:
+            for row in df["tags"]:
+                if isinstance(row, str):
+                    continue
+                try:
+                    labels.update(str(t) for t in row)
+                except TypeError:
+                    continue
+    return sorted(labels)
+
+
 def mark_fixed(db: Session, badcase_ids: list[int], model_version_id: int, version_label: str) -> None:
     if not badcase_ids:
         return
