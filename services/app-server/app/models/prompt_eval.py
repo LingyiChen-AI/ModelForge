@@ -1,3 +1,4 @@
+from datetime import datetime
 from sqlalchemy import ForeignKey, JSON, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base, TimestampMixin, CreatorMixin
@@ -45,9 +46,20 @@ class PromptEvalItem(Base, TimestampMixin):
     dataset_version_id: Mapped[int] = mapped_column()
     row_index: Mapped[int] = mapped_column()
     inputs: Mapped[dict] = mapped_column(JSON, default=dict)
+    winner_arm_id: Mapped[int | None] = mapped_column(ForeignKey("prompt_eval_arms.id"), nullable=True)
+    all_bad: Mapped[bool] = mapped_column(default=False)
+    is_good: Mapped[bool | None] = mapped_column(nullable=True)
+    evaluated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    evaluated_at: Mapped[datetime | None] = mapped_column(nullable=True)
     outputs: Mapped[list["PromptEvalOutput"]] = relationship(
         lazy="selectin", cascade="all, delete-orphan", back_populates="item",
         order_by="PromptEvalOutput.id")
+    annotator: Mapped["User | None"] = relationship(  # type: ignore  # noqa: F821
+        "User", lazy="selectin", viewonly=True, foreign_keys=[evaluated_by])
+
+    @property
+    def annotated_by_name(self) -> str | None:
+        return self.annotator.name if self.annotator else None
 
 
 class PromptEvalOutput(Base, TimestampMixin):

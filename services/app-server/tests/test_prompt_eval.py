@@ -165,3 +165,24 @@ def test_prompt_eval_api_requires_perm(session_factory):
     assert c.get("/prompt-evals", headers=H).status_code == 403
     assert c.post("/prompt-evals", json={"eval_type": "single_prompt", "name": "r",
                "prompt_version_ids": [1], "model_ids": [1], "dataset_version_ids": [1]}, headers=H).status_code == 403
+
+
+def test_item_verdict_columns(session_factory):
+    from datetime import datetime, timezone
+    from app.models.prompt_eval import PromptEvalRun, PromptEvalArm, PromptEvalItem
+    from app.models.user import User
+    from app.models.rbac import Role
+    db = session_factory()
+    role = Role(name="r-v", data_scope="all"); db.add(role); db.commit()
+    u = User(name="judge", email="j@x.com", role_id=role.id); db.add(u); db.commit()
+    run = PromptEvalRun(name="r", eval_type="multi_prompt",
+                        prompt_version_ids=[1], model_ids=[2], dataset_version_ids=[3])
+    run.arms.append(PromptEvalArm(arm_index=0, prompt_version_id=1, model_id=2, label="A"))
+    db.add(run); db.commit(); db.refresh(run)
+    it = PromptEvalItem(run_id=run.id, item_index=0, dataset_version_id=3, row_index=0, inputs={})
+    it.winner_arm_id = run.arms[0].id
+    it.evaluated_by = u.id
+    it.evaluated_at = datetime.now(timezone.utc)
+    db.add(it); db.commit(); db.refresh(it)
+    assert it.winner_arm_id == run.arms[0].id and it.all_bad is False and it.is_good is None
+    assert it.annotated_by_name == "judge"
