@@ -25,6 +25,8 @@ def _comparison(db: Session, run: PromptEvalRun) -> dict | None:
                PromptEvalRun.id != run.id)
         .order_by(PromptEvalRun.id.desc())).scalars().all()
     cur = {(i.dataset_version_id, i.row_index): i.is_good for i in _evaluated_items(db, run.id)}
+    # 候选上一版本运行按 id 降序;取第一个与本 run 有「同 (测试集版本, 行号)」已评交集的运行
+    # ——更近但零行重叠的运行会被跳过(没有重叠就无从对比)。
     for prev_id in prev_ids:
         prev = {(i.dataset_version_id, i.row_index): i.is_good for i in _evaluated_items(db, prev_id)}
         keys = set(cur) & set(prev)

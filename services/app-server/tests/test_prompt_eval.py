@@ -326,3 +326,24 @@ def test_verdict_requires_perm(session_factory):
     from fastapi.testclient import TestClient
     c = TestClient(app)
     assert c.patch(f"/prompt-evals/items/{iid}/verdict", json={"winner_arm_id": aid}, headers=H).status_code == 403
+
+
+def test_items_shuffle_is_stable(session_factory):
+    # 盲测匿名:同 item.id 两次取 items,outputs 顺序必须一致(确定性打乱)
+    from app.models.prompt_eval import PromptEvalOutput
+    db = session_factory()
+    run, arms, it = _seed_eval_run(db, "multi_prompt", 3)
+    for a in arms:
+        db.add(PromptEvalOutput(item_id=it.id, arm_id=a.id, output_text=f"o{a.id}", status="done"))
+    db.commit()
+    u = make_user(db, codes=("prompteval:read",), data_scope="all", email="sh@x.com")
+    H = auth_headers(u.id); rid, iid = run.id, it.id; db.close()
+    from app.main import app
+    from fastapi.testclient import TestClient
+    c = TestClient(app)
+    def order():
+        items = c.get(f"/prompt-evals/{rid}/items", headers=H).json()
+        row = next(x for x in items if x["id"] == iid)
+        return [o["arm_id"] for o in row["outputs"]]
+    o1, o2 = order(), order()
+    assert o1 == o2 and sorted(o1) == sorted(a.id for a in arms)   # 同序 + 不丢臂
