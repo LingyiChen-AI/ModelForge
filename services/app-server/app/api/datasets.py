@@ -8,7 +8,7 @@ from app.authz import require, apply_scope
 from app.storage import build_storage
 from app.models.user import User
 from app.models.dataset import Dataset, DatasetVersion
-from app.schemas.dataset import DatasetCreate, DatasetOut, DatasetVersionOut
+from app.schemas.dataset import DatasetCreate, DatasetOut, DatasetVersionOut, DatasetTreeOut
 from app.services.dataset_service import create_version, serialize_template, serialize_df
 from app.pagination import paginate
 
@@ -35,6 +35,25 @@ def list_datasets(response: Response, page: int | None = Query(None, ge=1),
                   user: User = Depends(require("dataset:read")), db: Session = Depends(get_db)):
     stmt = apply_scope(select(Dataset).order_by(Dataset.id.desc()), Dataset, user)
     return paginate(db, stmt, response, page, page_size)
+
+
+@router.get("/tree", response_model=list[DatasetTreeOut])
+def dataset_tree(kind: str | None = None, user: User = Depends(require("dataset:read")),
+                 db: Session = Depends(get_db)):
+    """Datasets + their versions in ONE call (2 queries), for cascade/version pickers.
+    Replaces the frontend's N+1 (one /versions request per dataset)."""
+    stmt = apply_scope(select(Dataset).order_by(Dataset.id.desc()), Dataset, user)
+    if kind:
+        stmt = stmt.where(Dataset.kind == kind)
+    datasets = list(db.execute(stmt).scalars())
+    by_ds: dict[int, list] = {}
+    if datasets:
+        ids = [d.id for d in datasets]
+        for v in db.execute(select(DatasetVersion).where(DatasetVersion.dataset_id.in_(ids))
+                            .order_by(DatasetVersion.version_no.desc())).scalars():
+            by_ds.setdefault(v.dataset_id, []).append(v)
+    return [DatasetTreeOut(id=d.id, name=d.name, kind=d.kind, task_type=d.task_type,
+                           versions=by_ds.get(d.id, [])) for d in datasets]
 
 def _read_upload(file: UploadFile) -> pd.DataFrame:
     raw = file.file.read()

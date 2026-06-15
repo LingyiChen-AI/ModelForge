@@ -37,18 +37,19 @@ export const listVersions = (id: number) =>
 export const listVersionsPaged = (id: number, p: { page: number; page_size: number }) =>
   getPaginated<DatasetVersion>(`/datasets/${id}/versions`, p);
 
-// Flattened version picker options for a dataset kind (train / eval).
-// There is no flat "all versions" endpoint, so we fan out per dataset.
+// Dataset → versions tree, computed by the backend in ONE call (no per-dataset N+1).
+type DatasetTreeRow = { id: number; name: string; task_type: string;
+  versions: { id: number; version_no: number; row_count: number }[] };
+const getDatasetTree = (kind?: "train" | "eval" | "test") =>
+  api.get<DatasetTreeRow[]>("/datasets/tree", { params: kind ? { kind } : {} }).then(r => r.data);
+
+// Flattened version picker options for a dataset kind (train / eval / test).
 export type VersionOption = { id: number; label: string; taskType: string };
 export async function listVersionOptions(kind?: "train" | "eval" | "test"): Promise<VersionOption[]> {
-  const datasets = await listDatasets();
-  const scoped = kind ? datasets.filter(d => d.kind === kind) : datasets;
-  const groups = await Promise.all(
-    scoped.map(async d => (await listVersions(d.id)).map(v => ({
-      id: v.id, label: `${d.name} · V${v.version_no}`, taskType: d.task_type,
-    }))),
-  );
-  return groups.flat().sort((a, b) => b.id - a.id);
+  const tree = await getDatasetTree(kind);
+  return tree
+    .flatMap(d => d.versions.map(v => ({ id: v.id, label: `${d.name} · V${v.version_no}`, taskType: d.task_type })))
+    .sort((a, b) => b.id - a.id);
 }
 
 // Dataset → versions tree for cascade pickers (training).
@@ -57,12 +58,8 @@ export type DatasetNode = {
   versions: { id: number; version_no: number; row_count: number }[];
 };
 export async function listDatasetTree(kind?: "train" | "eval" | "test"): Promise<DatasetNode[]> {
-  const datasets = await listDatasets();
-  const scoped = kind ? datasets.filter(d => d.kind === kind) : datasets;
-  return Promise.all(scoped.map(async d => ({
-    id: d.id, name: d.name, taskType: d.task_type,
-    versions: (await listVersions(d.id)).map(v => ({ id: v.id, version_no: v.version_no, row_count: v.row_count })),
-  })));
+  const tree = await getDatasetTree(kind);
+  return tree.map(d => ({ id: d.id, name: d.name, taskType: d.task_type, versions: d.versions }));
 }
 export const uploadVersion = (id: number, file: File, note: string) => {
   const fd = new FormData(); fd.append("file", file); fd.append("note", note);

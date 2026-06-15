@@ -34,3 +34,24 @@ class DatasetVersionOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class DatasetVersionLite(BaseModel):
+    id: int
+    version_no: int
+    row_count: int
+
+    class Config:
+        from_attributes = True
+
+
+class DatasetTreeOut(BaseModel):
+    """A dataset with its versions, for cascade/version pickers (one-shot, no N+1)."""
+    id: int
+    name: str
+    kind: str
+    task_type: str
+    versions: list[DatasetVersionLite] = []
+
+    class Config:
+        from_attributes = True
