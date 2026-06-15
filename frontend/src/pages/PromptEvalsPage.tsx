@@ -1,15 +1,16 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_PAGE_SIZE } from "../constants";
-import { ClipboardCheck, Plus } from "lucide-react";
+import { ClipboardCheck, Plus, PencilLine, BarChart3 } from "lucide-react";
 import {
-  listPromptEvalsPaged, createPromptEval, getPromptEvalOptions,
-  type PromptEval, type PromptEvalOptions,
+  listPromptEvalsPaged, createPromptEval, getPromptEvalOptions, getPromptEvalStats,
+  type PromptEval, type PromptEvalOptions, type PromptEvalStats,
 } from "../api/client";
 import {
   Badge, Button, Drawer, EmptyState, Field, Input, PageHeader, Pagination,
   Select, StatusBadge, TableShell, Creator, CreatedAt,
 } from "../ui";
 import { toastError } from "../toast";
+import { navigate } from "../router";
 
 const TYPE_LABEL: Record<string, string> = {
   multi_prompt: "多 Prompt 盲测", multi_model: "多模型盲测", single_prompt: "单 Prompt 版本对比",
@@ -129,6 +130,7 @@ export function PromptEvalsPage() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [total, setTotal] = useState(0);
   const [open, setOpen] = useState(false);
+  const [statsId, setStatsId] = useState<number | null>(null);
 
   const reload = () => listPromptEvalsPaged({ page, page_size: pageSize })
     .then(res => { setItems(res.items); setTotal(res.total); });
@@ -144,7 +146,7 @@ export function PromptEvalsPage() {
         actions={<Button variant="primary" onClick={() => setOpen(true)}><Plus size={16} /> 新建评测</Button>} />
 
       <TableShell loading={loading} empty={items.length === 0}
-        head={<><th>名称</th><th>类型</th><th>状态</th><th>进度</th><th>创建者</th><th className="w-36">创建时间</th></>}>
+        head={<><th>名称</th><th>类型</th><th>状态</th><th>进度</th><th>创建者</th><th className="w-36">创建时间</th><th className="w-44 text-right"></th></>}>
         {items.length === 0 ? (
           <EmptyState icon={<ClipboardCheck size={22} />} title="还没有评测" hint="新建一个 Prompt 评测。" />
         ) : items.map(r => (
@@ -162,12 +164,63 @@ export function PromptEvalsPage() {
             </td>
             <td><Creator name={r.created_by_name} /></td>
             <td><CreatedAt at={r.created_at} /></td>
+            <td className="text-right">
+              {r.status === "succeeded" && (
+                <div className="flex items-center justify-end gap-2">
+                  <Button size="sm" variant="primary" onClick={() => navigate(`/prompt-evals/${r.id}/evaluate`)}><PencilLine size={13} /> 评估</Button>
+                  <Button size="sm" onClick={() => setStatsId(r.id)}><BarChart3 size={13} /> 统计</Button>
+                </div>
+              )}
+            </td>
           </tr>
         ))}
       </TableShell>
       <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={s => { setPageSize(s); setPage(1); }} />
 
       {open && <NewEvalDrawer onClose={() => setOpen(false)} onCreated={reload} />}
+      {statsId !== null && <StatsDrawer runId={statsId} onClose={() => setStatsId(null)} />}
     </>
+  );
+}
+
+function StatsDrawer({ runId, onClose }: { runId: number; onClose: () => void }) {
+  const [s, setS] = useState<PromptEvalStats | null>(null);
+  useEffect(() => { getPromptEvalStats(runId).then(setS).catch(() => toastError("加载统计失败")); }, [runId]);
+  return (
+    <Drawer open onClose={onClose} title="评测统计" subtitle={s ? `已评 ${s.evaluated} / 共 ${s.total}` : undefined} width="max-w-lg">
+      {!s ? <p className="text-[13px] text-slate-400">加载中…</p> : s.eval_type === "single_prompt" ? (
+        <div className="flex flex-col gap-4">
+          <div className="rounded-xl ring-1 ring-slate-200 p-4">
+            <div className="text-[13px] text-slate-500">好率</div>
+            <div className="text-[22px] font-semibold text-slate-800">{Math.round((s.good_rate ?? 0) * 100)}%</div>
+            <div className="text-[12px] text-slate-400">好 {s.good} · 坏 {s.bad}</div>
+          </div>
+          {s.comparison ? (
+            <div className="rounded-xl ring-1 ring-slate-200 p-4">
+              <div className="mb-1 text-[13px] text-slate-500">对比上一版本:{s.comparison.compare_version_label}</div>
+              <div className="text-[13px] text-emerald-600">变好率 {Math.round(s.comparison.improved_rate * 100)}%({s.comparison.improved} 条)</div>
+              <div className="text-[13px] text-red-600">变坏率 {Math.round(s.comparison.regressed_rate * 100)}%({s.comparison.regressed} 条)</div>
+              <div className="text-[12px] text-slate-400">可对比 {s.comparison.comparable} 条</div>
+            </div>
+          ) : <p className="text-[13px] text-slate-400">无可对比的上一版本数据。</p>}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {(s.arms ?? []).map(a => (
+            <div key={a.arm_id} className="rounded-xl ring-1 ring-slate-200 p-3">
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-slate-800">{a.label}</span>
+                {a.arm_id === s.best_arm_id && <Badge tone="green">最优</Badge>}
+                <span className="ml-auto text-[13px] text-slate-600">胜率 {Math.round(a.win_rate * 100)}% · {a.wins} 胜</span>
+              </div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                <div className="h-full bg-brand-500" style={{ width: `${Math.round(a.win_rate * 100)}%` }} />
+              </div>
+            </div>
+          ))}
+          <div className="text-[12px] text-slate-400">都一样坏 {s.all_bad} 条</div>
+        </div>
+      )}
+    </Drawer>
   );
 }
