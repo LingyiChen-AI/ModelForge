@@ -5,8 +5,11 @@ function fmtMetric(k: string, v: number | string): string {
   return Number.isInteger(v) ? String(v) : v.toFixed(3);
 }
 
-// non-core keys we never show as chips (counts / diagnostics, not quality metrics)
-const NOISE = new Set(["loss", "n_samples", "unknown_labels", "train_pairs"]);
+// non-core keys we never show as chips (counts / timings / diagnostics, not quality metrics)
+const NOISE = new Set([
+  "loss", "n_samples", "unknown_labels", "train_pairs",
+  "runtime", "samples_per_second", "steps_per_second",        // HF Trainer timing fields
+]);
 
 export function MetricChips({ data, max = 5 }: { data: Record<string, number>; max?: number }) {
   const entries = Object.entries(data || {})

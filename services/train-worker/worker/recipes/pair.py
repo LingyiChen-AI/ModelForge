@@ -41,7 +41,13 @@ class PairRecipe(Recipe):
         if on_progress:
             trainer.add_callback(hf_progress_callback(on_progress))
         trainer.train()
-        metrics = {k.replace("eval_", ""): float(v) for k, v in trainer.evaluate().items()
-                   if isinstance(v, (int, float))}
         trainer.save_model(output_dir); tok.save_pretrained(output_dir)
+        # Report meaningful similarity metrics (spearman/pearson/mse) from the eval set,
+        # not HF Trainer's timing fields. Mirrors how embedding surfaces recall@k.
+        from worker.evaluators.pair import PairEvaluator
+        eval_for_metrics = eval_df if eval_df is not None and len(eval_df) > 0 else df
+        try:
+            metrics = PairEvaluator().evaluate(output_dir, eval_for_metrics)
+        except Exception:
+            metrics = {}
         return TrainResult(metrics=metrics, artifact_dir=output_dir, label_names=[])
