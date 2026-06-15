@@ -4,13 +4,14 @@ import { SlidersHorizontal, Plus, Trash2, FlaskConical, X, Power } from "lucide-
 import {
   listLlmProvidersPaged, createLlmProvider, updateLlmProvider, deleteLlmProvider,
   addLlmModel, deleteLlmModel, testLlmModel,
+  getAiEvalPrompt, setAiEvalPrompt,
   type LlmProvider, type LlmTestResult,
 } from "../api/client";
 import {
   Badge, Button, ConfirmDialog, Drawer, EmptyState, Field, Input, Mono,
   PageHeader, Pagination, TableShell, Creator, CreatedAt,
 } from "../ui";
-import { toastError } from "../toast";
+import { toastError, toastSuccess } from "../toast";
 
 type TestState = Record<number, "loading" | LlmTestResult>;
 
@@ -151,6 +152,8 @@ export function SettingsPage() {
       </TableShell>
       <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={s => { setPageSize(s); setPage(1); }} />
 
+      <AiEvalPromptCard />
+
       <Drawer
         open={open}
         onClose={() => setOpen(false)}
@@ -197,6 +200,25 @@ export function SettingsPage() {
         onConfirm={doDelete}
       />
     </>
+  );
+}
+
+function AiEvalPromptCard() {
+  const [value, setValue] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { getAiEvalPrompt().then(setValue).catch(() => {}); }, []);
+  const save = () => {
+    setBusy(true);
+    setAiEvalPrompt(value).then(() => toastSuccess("已保存")).catch(() => toastError("保存失败")).finally(() => setBusy(false));
+  };
+  return (
+    <div className="mt-8 rounded-2xl bg-white p-6 ring-1 ring-slate-200/70">
+      <div className="mb-1 text-[15px] font-semibold text-slate-800">AI 评估 Prompt</div>
+      <p className="mb-3 text-[12.5px] text-slate-500">AI 自动评估时给评判模型的系统指令。要求模型只输出 JSON(多候选选 winner 序号 / all_bad;单候选 good 真假)。</p>
+      <textarea value={value} onChange={e => setValue(e.target.value)} rows={8}
+        className="w-full rounded-lg bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 outline-none focus:ring-2 focus:ring-brand-500 font-mono" />
+      <div className="mt-3 flex justify-end"><Button variant="primary" loading={busy} onClick={save}>保存</Button></div>
+    </div>
   );
 }
 

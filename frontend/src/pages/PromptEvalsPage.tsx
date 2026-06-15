@@ -1,15 +1,15 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_PAGE_SIZE } from "../constants";
-import { ClipboardCheck, Plus, PencilLine, BarChart3 } from "lucide-react";
+import { ClipboardCheck, Plus, PencilLine, BarChart3, Sparkles } from "lucide-react";
 import {
-  listPromptEvalsPaged, createPromptEval, getPromptEvalOptions, getPromptEvalStats,
+  listPromptEvalsPaged, createPromptEval, getPromptEvalOptions, getPromptEvalStats, triggerAiEval,
   type PromptEval, type PromptEvalOptions, type PromptEvalStats,
 } from "../api/client";
 import {
   Badge, Button, Drawer, EmptyState, Field, Input, PageHeader, Pagination,
   Select, StatusBadge, TableShell, Creator, CreatedAt,
 } from "../ui";
-import { toastError } from "../toast";
+import { toastError, toastSuccess } from "../toast";
 import { navigate } from "../router";
 
 const TYPE_LABEL: Record<string, string> = {
@@ -131,6 +131,7 @@ export function PromptEvalsPage() {
   const [total, setTotal] = useState(0);
   const [open, setOpen] = useState(false);
   const [statsId, setStatsId] = useState<number | null>(null);
+  const [aiRun, setAiRun] = useState<PromptEval | null>(null);
 
   const reload = () => listPromptEvalsPaged({ page, page_size: pageSize })
     .then(res => { setItems(res.items); setTotal(res.total); });
@@ -169,6 +170,7 @@ export function PromptEvalsPage() {
                 <div className="flex items-center justify-end gap-2">
                   <Button size="sm" variant="primary" onClick={() => navigate(`/prompt-evals/${r.id}/evaluate`)}><PencilLine size={13} /> 评估</Button>
                   <Button size="sm" onClick={() => setStatsId(r.id)}><BarChart3 size={13} /> 统计</Button>
+                  <Button size="sm" variant="subtle" onClick={() => setAiRun(r)}><Sparkles size={13} /> AI 评估</Button>
                 </div>
               )}
             </td>
@@ -179,6 +181,7 @@ export function PromptEvalsPage() {
 
       {open && <NewEvalDrawer onClose={() => setOpen(false)} onCreated={reload} />}
       {statsId !== null && <StatsDrawer runId={statsId} onClose={() => setStatsId(null)} />}
+      {aiRun && <AiEvalDrawer run={aiRun} onClose={() => setAiRun(null)} />}
     </>
   );
 }
@@ -221,6 +224,31 @@ function StatsDrawer({ runId, onClose }: { runId: number; onClose: () => void })
           <div className="text-[12px] text-slate-400">都一样坏 {s.all_bad} 条</div>
         </div>
       )}
+    </Drawer>
+  );
+}
+
+function AiEvalDrawer({ run, onClose }: { run: PromptEval; onClose: () => void }) {
+  const [models, setModels] = useState<{ id: number; label: string }[]>([]);
+  const [mid, setMid] = useState("");
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { getPromptEvalOptions().then(o => setModels(o.models)).catch(() => toastError("加载模型失败")); }, []);
+  const go = () => {
+    setBusy(true);
+    triggerAiEval(run.id, Number(mid))
+      .then(() => { toastSuccess("已发起 AI 评估,稍后刷新查看结果"); onClose(); })
+      .catch(e => toastError(e?.response?.data?.detail ?? "发起失败"))
+      .finally(() => setBusy(false));
+  };
+  return (
+    <Drawer open onClose={onClose} title="AI 自动评估" subtitle={`用评判模型对「${run.name}」未 AI 评的数据自动判优。`} width="max-w-md"
+      footer={<div className="flex justify-end gap-2"><Button variant="subtle" disabled={busy} onClick={onClose}>取消</Button><Button variant="primary" disabled={!mid} loading={busy} onClick={go}><Sparkles size={15} /> 开始</Button></div>}>
+      <Field label="评判模型">
+        <Select value={mid} onChange={e => setMid(e.target.value)}>
+          <option value="">选择评判模型…</option>
+          {models.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+        </Select>
+      </Field>
     </Drawer>
   );
 }
