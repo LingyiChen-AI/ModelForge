@@ -1,25 +1,24 @@
 import { useState, type ReactNode } from "react";
 import {
   LayoutDashboard, Database, Cpu, Boxes, BarChart3, Rocket, Users, ShieldCheck,
-  KeyRound, LogOut, PanelLeftClose, PanelLeftOpen, Bug, SlidersHorizontal, MessageSquareText, ClipboardCheck,
+  KeyRound, LogOut, PanelLeftClose, PanelLeftOpen, Bug, SlidersHorizontal, MessageSquareText,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
 import { cx } from "../ui";
 import { navigate } from "../router";
 import { Logo } from "./Logo";
 
-type NavItem = { href: string; label: string; icon: ReactNode; perm?: string; match: (p: string) => boolean };
+type NavItem = { href: string; label: string; icon: ReactNode; perm?: string; perms?: string[]; match: (p: string) => boolean };
 
 const NAV: NavItem[] = [
   { href: "/", label: "概览", icon: <LayoutDashboard size={18} />, match: p => p === "/" },
   { href: "/datasets", label: "数据集", icon: <Database size={18} />, perm: "dataset:read", match: p => p.startsWith("/datasets") },
   { href: "/training", label: "训练", icon: <Cpu size={18} />, perm: "training:read", match: p => p.startsWith("/training") },
   { href: "/models", label: "模型", icon: <Boxes size={18} />, perm: "model:read", match: p => p.startsWith("/models") },
-  { href: "/eval", label: "测试", icon: <BarChart3 size={18} />, perm: "eval:read", match: p => p.startsWith("/eval") },
+  { href: "/eval", label: "测试", icon: <BarChart3 size={18} />, perms: ["eval:read", "prompteval:read"], match: p => p.startsWith("/eval") },
   { href: "/deploy", label: "部署", icon: <Rocket size={18} />, perm: "deploy:read", match: p => p.startsWith("/deploy") },
   { href: "/badcase", label: "Badcase", icon: <Bug size={18} />, perm: "badcase:read", match: p => p.startsWith("/badcase") },
   { href: "/prompts", label: "Prompt", icon: <MessageSquareText size={18} />, perm: "prompt:read", match: p => p.startsWith("/prompts") },
-  { href: "/prompt-evals", label: "Prompt 评测", icon: <ClipboardCheck size={18} />, perm: "prompteval:read", match: p => p.startsWith("/prompt-evals") },
   { href: "/users", label: "用户", icon: <Users size={18} />, perm: "user:manage", match: p => p.startsWith("/users") },
   { href: "/roles", label: "角色", icon: <ShieldCheck size={18} />, perm: "role:manage", match: p => p.startsWith("/roles") },
   { href: "/api-keys", label: "API Key", icon: <KeyRound size={18} />, perm: "apikey:manage", match: p => p.startsWith("/api-keys") },
@@ -34,7 +33,7 @@ export function AppShell({ path, children }: { path: string; children: ReactNode
   const { me, can, logout } = useAuth();
   // collapsed = icon rail; expanded = labels. Start collapsed on small screens.
   const [collapsed, setCollapsed] = useState(() => typeof window !== "undefined" && window.innerWidth < 1024);
-  const items = NAV.filter(n => !n.perm || can(n.perm));
+  const items = NAV.filter(n => n.perms ? n.perms.some(can) : (!n.perm || can(n.perm)));
 
   return (
     <div className="min-h-dvh bg-slate-50">

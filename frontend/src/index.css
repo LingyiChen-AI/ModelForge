@@ -74,3 +74,18 @@
   .tbl tbody tr { @apply transition-colors hover:bg-slate-50/80; }
   .tbl tbody tr:last-child td { @apply border-b-0; }
 }
+
+/* —— login page entrance / ambient motion —— */
+@keyframes mf-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes mf-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50%      { transform: translate(0, -18px) scale(1.06); }
+}
+.mf-rise { animation: mf-rise .7s cubic-bezier(.22,.61,.36,1) both; }
+.mf-drift { animation: mf-drift 9s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .mf-rise, .mf-drift { animation: none; }
+}

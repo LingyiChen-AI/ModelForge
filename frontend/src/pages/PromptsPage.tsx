@@ -7,7 +7,7 @@ import {
 } from "../api/client";
 import {
   Badge, Button, Drawer, EmptyState, Field, Input, PageHeader, Pagination,
-  TableShell, Creator, CreatedAt,
+  TableShell, Creator, CreatedAt, Select,
 } from "../ui";
 import { toastError, toastSuccess } from "../toast";
 
@@ -100,24 +100,73 @@ function Editor({
   );
 }
 
+// 只读 prompt 文本框:撑满分配到的高度,内容超出时框内滚动(prompt 可能很长)。
+function RoPrompt({ label, text }: { label: string; text: string }) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
+      <textarea
+        readOnly
+        value={text}
+        placeholder="(空)"
+        className="block w-full flex-1 resize-none rounded-lg border border-slate-200 bg-slate-50 p-3 font-mono text-[12.5px] leading-relaxed text-slate-700 placeholder:text-slate-300 focus:outline-none focus:ring-1 focus:ring-brand-200"
+      />
+    </div>
+  );
+}
+
 function HistoryDrawer({ promptId, onClose }: { promptId: number; onClose: () => void }) {
   const [detail, setDetail] = useState<PromptDetail | null>(null);
-  useEffect(() => { getPrompt(promptId).then(setDetail).catch(() => toastError("加载失败")); }, [promptId]);
+  const [vid, setVid] = useState<number | null>(null);
+  useEffect(() => {
+    getPrompt(promptId).then(d => {
+      setDetail(d);
+      setVid(d.versions.length ? d.versions[d.versions.length - 1].id : null);  // 默认最新版
+    }).catch(() => toastError("加载失败"));
+  }, [promptId]);
+
+  const versions = (detail?.versions ?? []).slice().reverse();  // 新版在前
+  const cur = versions.find(v => v.id === vid) ?? versions[0] ?? null;
+
   return (
-    <Drawer open onClose={onClose} title="版本历史" subtitle={detail?.name} width="max-w-2xl">
-      <div className="flex flex-col gap-3">
-        {(detail?.versions ?? []).slice().reverse().map(v => (
-          <div key={v.id} className="rounded-xl border border-slate-200 p-3">
-            <div className="mb-2 flex items-center gap-2">
-              <Badge tone="gray">V{v.version_no}</Badge>
-              <ParamChips params={v.params} />
-              <span className="ml-auto text-[12px] text-slate-400"><CreatedAt at={v.created_at} /></span>
-            </div>
-            {v.system_prompt && <pre className="mb-1 whitespace-pre-wrap rounded bg-slate-50 p-2 text-[12px] text-slate-700">[system] {v.system_prompt}</pre>}
-            <pre className="whitespace-pre-wrap rounded bg-slate-50 p-2 text-[12px] text-slate-700">[user] {v.user_prompt}</pre>
+    <Drawer open onClose={onClose} title="Prompt 详情" subtitle={detail?.name} width="max-w-2xl">
+      {versions.length === 0 ? (
+        <div className="py-8 text-center text-[13px] text-slate-400">暂无版本</div>
+      ) : (
+        <div className="flex h-full flex-col gap-4">
+          {/* 版本下拉:版本再多也只占一行,选一个版本看它的 system / user */}
+          <div className="flex items-center gap-3">
+            <span className="shrink-0 text-[12px] text-slate-400">版本</span>
+            <Select
+              value={String(cur?.id ?? "")}
+              onChange={e => setVid(Number(e.target.value))}
+              className="max-w-[15rem]"
+            >
+              {versions.map(v => (
+                <option key={v.id} value={v.id}>
+                  V{v.version_no} · {v.created_at?.slice(0, 16).replace("T", " ")}
+                </option>
+              ))}
+            </Select>
+            <span className="text-[12px] text-slate-400">共 {versions.length} 版</span>
           </div>
-        ))}
-      </div>
+
+          {cur && (
+            <>
+              {cur.params.length > 0 && (
+                <div className="flex items-center gap-2 border-b border-slate-100 pb-3">
+                  <span className="text-[12px] text-slate-400">参数</span>
+                  <ParamChips params={cur.params} />
+                </div>
+              )}
+              <div className="flex min-h-0 flex-1 flex-col gap-4">
+                <RoPrompt label="System" text={cur.system_prompt} />
+                <RoPrompt label="User" text={cur.user_prompt} />
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </Drawer>
   );
 }

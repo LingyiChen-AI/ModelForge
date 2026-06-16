@@ -69,7 +69,7 @@ export function BadcasePage() {
               <td className="px-4 py-3">
                 {r.fixed > 0 ? (
                   <div className="flex flex-wrap items-center gap-1">
-                    {r.fixed_versions.map(v => <Badge key={v} tone="green">V{v} 已修复</Badge>)}
+                    {r.fixed_versions.map(v => <Badge key={v.version_label} tone="green">V{v.version_label} 修复 {v.count} 条</Badge>)}
                     <span className="text-[12px] text-slate-500">共 {r.fixed}</span>
                   </div>
                 ) : <span className="text-slate-400">—</span>}

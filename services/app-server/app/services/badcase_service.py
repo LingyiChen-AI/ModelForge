@@ -122,7 +122,7 @@ def summary(db: Session) -> list[dict]:
             "model_version_label": model_version_label,
             "task_type": task_type,
             "reported": 0, "annotated": 0, "used": 0, "pending": 0, "fixed": 0,
-            "_versions": set()})
+            "_version_counts": {}})
         s["reported"] += 1
         if status in ("annotated", "used"):
             s["annotated"] += 1
@@ -132,12 +132,17 @@ def summary(db: Session) -> list[dict]:
             s["pending"] += 1
         if fixed_by:
             s["fixed"] += 1
-            for e in fixed_by:
+            for e in fixed_by:  # one badcase may be fixed by several versions -> count toward each
                 if e.get("version_label"):
-                    s["_versions"].add(str(e["version_label"]))
+                    label = str(e["version_label"])
+                    s["_version_counts"][label] = s["_version_counts"].get(label, 0) + 1
     out = []
     for s in by.values():
-        s["fixed_versions"] = sorted(s.pop("_versions"), key=lambda v: (0, int(v)) if v.isdigit() else (1, v))
+        counts: dict = s.pop("_version_counts")
+        s["fixed_versions"] = [
+            {"version_label": v, "count": counts[v]}
+            for v in sorted(counts, key=lambda v: (0, int(v)) if v.isdigit() else (1, v))
+        ]
         out.append(s)
     return sorted(out, key=lambda x: x["model_version_id"], reverse=True)
 

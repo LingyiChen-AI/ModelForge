@@ -6,10 +6,7 @@ import { Button, ConfirmDialog, Drawer, EmptyState, Field, Mono, PageHeader, Pag
 import { toastError } from "../toast";
 import { MetricChips as Metrics } from "../components/MetricChips";
 import { useAuth } from "../context/AuthContext";
-
-const TASK_LABEL: Record<string, string> = {
-  classification: "分类", ner: "序列标注", pair: "句对", embedding: "向量",
-};
+import { groupByTask } from "../taskGroups";
 
 export function EvalPage() {
   const { can } = useAuth();
@@ -62,7 +59,11 @@ export function EvalPage() {
         <span className="text-[13px] text-slate-500">筛选</span>
         <Select className="h-9 w-60" value={filterDv} onChange={e => { setFilterDv(e.target.value); setPage(1); }}>
           <option value="">全部测试集版本</option>
-          {evalVersions.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+          {groupByTask(evalVersions, v => v.taskType, v => v.label).map(g => (
+            <optgroup key={g.task} label={g.label}>
+              {g.items.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+            </optgroup>
+          ))}
         </Select>
       </div>
 
@@ -124,7 +125,11 @@ export function EvalPage() {
           <Field label="模型版本">
             <Select value={mvId} onChange={e => changeMv(e.target.value)}>
               <option value="">选择模型版本…</option>
-              {models.map(m => <option key={m.id} value={m.id}>{m.name} · V{m.mlflow_version} · {TASK_LABEL[m.task_type] ?? m.task_type}</option>)}
+              {groupByTask(models, m => m.task_type, m => m.name, m => m.mlflow_version).map(g => (
+                <optgroup key={g.task} label={g.label}>
+                  {g.items.map(m => <option key={m.id} value={m.id}>{m.name} · V{m.mlflow_version}</option>)}
+                </optgroup>
+              ))}
             </Select>
           </Field>
           <Field label="测试集版本">

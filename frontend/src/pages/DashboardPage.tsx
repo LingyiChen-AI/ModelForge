@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Database, Boxes, Layers, Cpu, BarChart3, Rocket, RefreshCw, Bug, type LucideIcon } from "lucide-react";
+import { Database, Boxes, Layers, Cpu, BarChart3, Rocket, RefreshCw, Bug, MessageSquareText, ClipboardCheck, type LucideIcon } from "lucide-react";
 import { getStats, getCharts, getBadcaseStats, type Stats, type Charts, type BadcaseStats } from "../api/client";
 import { Button, PageHeader } from "../ui";
 import { Donut, BarList, type Seg } from "../components/charts";
@@ -15,6 +15,8 @@ const CARDS: StatCard[] = [
   { key: "training_jobs", label: "训练任务", icon: Cpu, to: "/training", tone: "amber" },
   { key: "eval_runs", label: "模型测试", icon: BarChart3, to: "/eval", tone: "indigo" },
   { key: "deployments", label: "部署", icon: Rocket, to: "/deploy", tone: "brand" },
+  { key: "prompts", label: "Prompt", icon: MessageSquareText, to: "/prompts", tone: "green" },
+  { key: "prompt_eval_runs", label: "Prompt 评测", icon: ClipboardCheck, to: "/eval/prompt", tone: "violet" },
 ];
 
 const TONE: Record<Tone, string> = {
@@ -35,7 +37,17 @@ const TASK_CONF: Conf[] = [
 ];
 const KIND_CONF: Conf[] = [
   { key: "train", label: "训练集", color: "#3b82f6" }, { key: "eval", label: "评估集", color: "#10b981" },
-  { key: "test", label: "测试集", color: "#8b5cf6" },
+  { key: "test", label: "测试集", color: "#8b5cf6" }, { key: "prompt", label: "Prompt 测试集", color: "#22c55e" },
+];
+const PROMPT_TYPE_CONF: Conf[] = [
+  { key: "multi_prompt", label: "多 Prompt 盲测", color: "#8b5cf6" },
+  { key: "multi_model", label: "多模型盲测", color: "#06b6d4" },
+  { key: "single_prompt", label: "单 Prompt 版本对比", color: "#f59e0b" },
+];
+const EVAL_PROGRESS_CONF: Conf[] = [
+  { key: "human", label: "人工已评", color: "#10b981" },
+  { key: "ai", label: "AI 已评", color: "#8b5cf6" },
+  { key: "pending", label: "待人工评", color: "#f59e0b" },
 ];
 const DEPLOY_CONF: Conf[] = [
   { key: "running", label: "运行中", color: "#10b981" }, { key: "stopped", label: "已停止", color: "#94a3b8" },
@@ -108,23 +120,23 @@ export function DashboardPage() {
           <Button variant="subtle" onClick={load}><RefreshCw size={14} /> 重试</Button>
         </div>
       ) : stats === null ? (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
-          {Array.from({ length: 6 }).map((_, i) => <div key={i} className="card h-[104px] animate-pulse bg-slate-50" />)}
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {Array.from({ length: 8 }).map((_, i) => <div key={i} className="card h-[88px] animate-pulse bg-slate-50" />)}
         </div>
       ) : cards.length === 0 ? (
         <div className="card p-8 text-center text-[13px] text-slate-400">暂无可展示的统计(没有相关读权限)。</div>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {cards.map(c => {
               const Icon = c.icon;
               return (
                 <button
                   key={c.key}
                   onClick={() => navigate(c.to)}
-                  className="card flex flex-col gap-3 p-5 text-left transition hover:shadow-md hover:ring-1 hover:ring-brand-200 cursor-pointer"
+                  className="card flex items-center gap-4 p-5 text-left transition hover:shadow-md hover:ring-1 hover:ring-brand-200 cursor-pointer"
                 >
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-xl ${TONE[c.tone]}`}><Icon size={20} /></div>
+                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${TONE[c.tone]}`}><Icon size={22} /></div>
                   <div>
                     <div className="tnum text-[28px] font-semibold leading-none text-slate-900">{stats[c.key]}</div>
                     <div className="mt-1.5 text-[12.5px] text-slate-500">{c.label}</div>
@@ -141,6 +153,16 @@ export function DashboardPage() {
             {charts.deployments_by_status && <ChartCard title="部署状态"><Donut data={toSegs(charts.deployments_by_status, DEPLOY_CONF)} /></ChartCard>}
             {charts.versions_by_task && <ChartCard title="模型版本 · 任务分布"><BarList data={toSegs(charts.versions_by_task, TASK_CONF)} /></ChartCard>}
             {charts.datasets_by_kind && <ChartCard title="数据集 · 类型分布"><BarList data={toSegs(charts.datasets_by_kind, KIND_CONF)} /></ChartCard>}
+            {charts.prompt_eval_runs_by_type && <ChartCard title="Prompt 评测 · 类型分布"><Donut data={toSegs(charts.prompt_eval_runs_by_type, PROMPT_TYPE_CONF)} /></ChartCard>}
+            {stats && "prompt_eval_items" in stats && (
+              <ChartCard title="Prompt 评估完成度">
+                <BarList data={toSegs({
+                  human: stats.prompt_human_evaluated ?? 0,
+                  ai: stats.prompt_ai_evaluated ?? 0,
+                  pending: Math.max(0, (stats.prompt_eval_items ?? 0) - (stats.prompt_human_evaluated ?? 0)),
+                }, EVAL_PROGRESS_CONF)} />
+              </ChartCard>
+            )}
           </div>
         </>
       )}

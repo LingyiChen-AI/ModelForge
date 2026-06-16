@@ -9,10 +9,7 @@ import { toastError } from "../toast";
 import { BASE_MODEL_GROUPS } from "../baseModels";
 import { useAuth } from "../context/AuthContext";
 import { navigate } from "../router";
-
-const TASK_LABEL: Record<string, string> = {
-  classification: "分类", ner: "序列标注", pair: "句对", embedding: "向量",
-};
+import { TASK_LABEL, groupByTask } from "../taskGroups";
 
 // Auto job name = compact local timestamp, e.g. 20260614135623 (yyyyMMddHHmmss).
 function tsName(): string {
@@ -229,7 +226,11 @@ export function TrainingPage() {
             <Field label="① 模型">
               <Select value={modelId} onChange={e => changeModel(e.target.value)}>
                 <option value="">选择模型…</option>
-                {models.map(m => <option key={m.id} value={m.id}>{m.name} · {TASK_LABEL[m.task_type] ?? m.task_type}</option>)}
+                {groupByTask(models, m => m.task_type, m => m.name).map(g => (
+                  <optgroup key={g.task} label={g.label}>
+                    {g.items.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </optgroup>
+                ))}
               </Select>
             </Field>
 

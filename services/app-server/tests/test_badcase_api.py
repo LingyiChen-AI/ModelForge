@@ -89,7 +89,7 @@ def test_badcase_summary_counts(tmp_path):
     assert r["model_version_id"] == mv.id and r["model_name"] == "意图" and r["model_version_label"] == "3"
     assert r["reported"] == 3 and r["annotated"] == 2 and r["used"] == 1
     assert r["pending"] == 1 and r["fixed"] == 1
-    assert r["fixed_versions"] == ["4"]
+    assert r["fixed_versions"] == [{"version_label": "4", "count": 1}]
 
 
 def test_mark_fixed_appends_and_dedupes(tmp_path):

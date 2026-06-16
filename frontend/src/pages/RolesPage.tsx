@@ -100,6 +100,7 @@ export function RolesPage() {
         onClose={() => setOpen(false)}
         title={editId == null ? "新建角色" : "编辑角色"}
         subtitle="勾选权限并选择数据范围,组合出一个自定义角色。"
+        width="max-w-3xl"
         footer={
           <div className="flex items-center justify-between">
             <span className="text-[12px] text-slate-400">已选 {sel.length} 项权限</span>
@@ -134,7 +135,7 @@ export function RolesPage() {
                 {allOn ? "清空" : "全选"}
               </button>
             </div>
-            <div className="flex flex-col gap-1.5">
+            <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
               {selectable.map(p => {
                 const on = sel.includes(p.code);
                 return (
@@ -142,7 +143,7 @@ export function RolesPage() {
                     key={p.code}
                     onClick={() => toggle(p.code)}
                     className={cx(
-                      "flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 transition",
+                      "flex cursor-pointer items-center gap-2.5 rounded-lg border px-3 py-2 transition",
                       on ? "border-brand-300 bg-brand-50" : "border-slate-200 bg-white hover:border-slate-300")}
                   >
                     <span className={cx(
@@ -150,8 +151,8 @@ export function RolesPage() {
                       on ? "border-brand-500 bg-brand-500 text-white" : "border-slate-300 bg-white")}>
                       {on && <Check size={12} strokeWidth={3} />}
                     </span>
-                    <span className="font-mono text-[12.5px] text-slate-700">{p.code}</span>
-                    {p.description && <span className="ml-auto truncate text-[11.5px] text-slate-400">{p.description}</span>}
+                    <span className="shrink-0 font-mono text-[12.5px] text-slate-700">{p.code}</span>
+                    {p.description && <span className="ml-auto truncate text-[11.5px] text-slate-400" title={p.description}>{p.description}</span>}
                   </label>
                 );
               })}

@@ -41,6 +41,11 @@ class BadcaseOut(BaseModel):
         from_attributes = True
 
 
+class FixedVersionStat(BaseModel):
+    version_label: str   # the model-version label that fixed these badcases (e.g. "5")
+    count: int           # how many badcases this version fixed
+
+
 class BadcaseSummaryOut(BaseModel):
     model_version_id: int
     model_name: str | None = None
@@ -51,4 +56,4 @@ class BadcaseSummaryOut(BaseModel):
     used: int        # status == used (already turned into a dataset)
     pending: int     # status == reported (awaiting annotation)
     fixed: int       # fixed_by non-empty
-    fixed_versions: list[str] = []   # distinct model-version labels that fixed any badcase (V4, V7)
+    fixed_versions: list[FixedVersionStat] = []   # per-version fix counts (V5 修复 12 条, V6 修复 8 条)

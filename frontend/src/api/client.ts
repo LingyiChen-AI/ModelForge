@@ -100,6 +100,7 @@ export type Charts = {
   versions_by_task?: Record<string, number>;
   datasets_by_kind?: Record<string, number>;
   deployments_by_status?: Record<string, number>;
+  prompt_eval_runs_by_type?: Record<string, number>;
 };
 export const getCharts = () => api.get<Charts>("/stats/charts").then(r => r.data);
 
@@ -294,11 +295,16 @@ export const listPromptEvalItemsPaged = (id: number, p: { bucket?: string; page:
 export const submitPromptEvalVerdict = (itemId: number, b: { winner_arm_id?: number; all_bad?: boolean; is_good?: boolean }) =>
   api.patch<PromptEvalItem>(`/prompt-evals/items/${itemId}/verdict`, b).then(r => r.data);
 export type PromptEvalArmStat = { arm_id: number; label: string; prompt_version_id: number; model_id: number; wins: number; win_rate: number };
-export type PromptEvalStats = {
-  eval_type: string; evaluated: number; total: number;
+// 一组评估来源(人工 / AI)的指标
+export type PromptEvalMetrics = {
+  evaluated: number;
   arms?: PromptEvalArmStat[]; all_bad?: number; best_arm_id?: number | null;
   good?: number; bad?: number; good_rate?: number;
   comparison?: { compare_run_id: number; compare_version_label: string | null; comparable: number; improved: number; regressed: number; improved_rate: number; regressed_rate: number } | null;
+};
+export type PromptEvalStats = {
+  eval_type: string; total: number;
+  human: PromptEvalMetrics; ai: PromptEvalMetrics;
 };
 export const getPromptEvalStats = (id: number) => api.get<PromptEvalStats>(`/prompt-evals/${id}/stats`).then(r => r.data);
 export const getAiEvalPrompt = () => api.get<{ value: string }>("/settings/ai-eval-prompt").then(r => r.data.value);

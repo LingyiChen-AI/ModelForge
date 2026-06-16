@@ -63,8 +63,15 @@ def get_run(run_id: int, _: User = Depends(require("prompteval:read")), db: Sess
 def list_items(run_id: int, response: Response, bucket: str = "all",
                page: int | None = Query(None, ge=1), page_size: int = Query(20, ge=1, le=200),
                _: User = Depends(require("prompteval:read")), db: Session = Depends(get_db)):
-    if not db.get(PromptEvalRun, run_id):
+    run = db.get(PromptEvalRun, run_id)
+    if not run:
         raise HTTPException(404, "run not found")
+    # 盲测:把「臂 → A/B/C」的对应在本评测内固定随机一次(random.Random(run_id)):
+    # 随机分配、不按版本号、界面不显示版本,但整轮一致——于是「每条都选 A」= 始终选同一个臂,
+    # 统计可解释。版本在统计页揭晓。
+    arms_perm = sorted(run.arms, key=lambda a: a.arm_index)
+    random.Random(run_id).shuffle(arms_perm)
+    arm_pos = {a.id: idx for idx, a in enumerate(arms_perm)}
     stmt = select(PromptEvalItem).where(PromptEvalItem.run_id == run_id)
     if bucket == "pending":
         stmt = stmt.where(PromptEvalItem.evaluated_at.is_(None))
@@ -74,12 +81,11 @@ def list_items(run_id: int, response: Response, bucket: str = "all",
     items = paginate(db, stmt, response, page, page_size)
     out = []
     for it in items:
-        shuffled = list(it.outputs)
-        random.Random(it.id).shuffle(shuffled)
+        ordered = sorted(it.outputs, key=lambda o: arm_pos.get(o.arm_id, 0))
         out.append(ItemOut(
             id=it.id, item_index=it.item_index, dataset_version_id=it.dataset_version_id,
             row_index=it.row_index, inputs=it.inputs,
-            outputs=[OutputOut.model_validate(o) for o in shuffled],
+            outputs=[OutputOut.model_validate(o) for o in ordered],
             winner_arm_id=it.winner_arm_id, all_bad=it.all_bad, is_good=it.is_good,
             annotated_by_name=it.annotated_by_name, evaluated_at=it.evaluated_at,
             ai_winner_arm_id=it.ai_winner_arm_id, ai_all_bad=it.ai_all_bad, ai_is_good=it.ai_is_good,

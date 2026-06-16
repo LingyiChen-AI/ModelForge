@@ -3,7 +3,7 @@ import { DatasetsPage } from "./pages/DatasetsPage";
 import { DatasetDetailPage } from "./pages/DatasetDetailPage";
 import { TrainingPage } from "./pages/TrainingPage";
 import { ModelsPage } from "./pages/ModelsPage";
-import { EvalPage } from "./pages/EvalPage";
+import { TestModule } from "./components/TestModule";
 import { DeployPage } from "./pages/DeployPage";
 import { LoginPage } from "./pages/LoginPage";
 import { UsersPage } from "./pages/UsersPage";
@@ -13,7 +13,6 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { BadcasePage } from "./pages/BadcasePage";
 import { BadcaseAnnotateWorkbench } from "./pages/BadcaseAnnotateWorkbench";
 import { PromptsPage } from "./pages/PromptsPage";
-import { PromptEvalsPage } from "./pages/PromptEvalsPage";
 import { PromptEvalWorkbench } from "./pages/PromptEvalWorkbench";
 import { useAuth } from "./context/AuthContext";
 import { AppShell } from "./components/AppShell";
@@ -40,17 +39,17 @@ export default function App() {
   else if (path === "/datasets") page = <DatasetsPage />;
   else if (path === "/training") page = <TrainingPage />;
   else if (path === "/models") page = <ModelsPage />;
-  else if (path === "/eval") page = <EvalPage />;
+  else if (path === "/eval") page = <TestModule active="model" />;
+  else if (/^\/eval\/prompt\/\d+\/evaluate$/.test(path)) {
+    page = <PromptEvalWorkbench runId={Number(path.split("/")[3])} />;
+  }
+  else if (path === "/eval/prompt") page = <TestModule active="prompt" />;
   else if (path === "/deploy") page = <DeployPage />;
   else if (path === "/users") page = <UsersPage />;
   else if (path === "/roles") page = <RolesPage />;
   else if (path === "/api-keys") page = <ApiKeysPage />;
   else if (path === "/settings") page = <SettingsPage />;
   else if (path === "/prompts") page = <PromptsPage />;
-  else if (/^\/prompt-evals\/\d+\/evaluate$/.test(path)) {
-    page = <PromptEvalWorkbench runId={Number(path.split("/")[2])} />;
-  }
-  else if (path === "/prompt-evals") page = <PromptEvalsPage />;
   else if (/^\/badcase\/annotate\/\d+$/.test(path)) {
     page = <BadcaseAnnotateWorkbench modelVersionId={Number(path.split("/")[3])} />;
   }

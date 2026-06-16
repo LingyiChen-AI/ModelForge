@@ -5,6 +5,7 @@ import { listDeploymentsPaged, createDeployment, stopDeployment, startDeployment
 import { Button, ConfirmDialog, Drawer, EmptyState, Field, Mono, PageHeader, Pagination, Select, StatusBadge, TableShell, Creator, CreatedAt, Badge } from "../ui";
 import { toastError } from "../toast";
 import { buildApiDoc, type ApiDoc } from "../apiDocs";
+import { groupByTask } from "../taskGroups";
 import { useAuth } from "../context/AuthContext";
 
 function CopyBtn({ text }: { text: string }) {
@@ -140,7 +141,11 @@ export function DeployPage() {
         <Field label="模型版本">
           <Select value={mvId} onChange={e => setMvId(e.target.value)} disabled={available.length === 0}>
             <option value="">{available.length === 0 ? "所有模型版本均已部署" : "选择模型版本…"}</option>
-            {available.map(m => <option key={m.id} value={m.id}>{m.name} · V{m.mlflow_version}</option>)}
+            {groupByTask(available, m => m.task_type, m => m.name, m => m.mlflow_version).map(g => (
+              <optgroup key={g.task} label={g.label}>
+                {g.items.map(m => <option key={m.id} value={m.id}>{m.name} · V{m.mlflow_version}</option>)}
+              </optgroup>
+            ))}
           </Select>
         </Field>
         <p className="mt-2 text-[12px] text-slate-400">每个模型版本只能部署一次;已部署的版本请在列表中启动/停止。</p>

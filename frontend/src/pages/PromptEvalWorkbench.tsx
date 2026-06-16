@@ -2,12 +2,13 @@ import { useEffect, useState } from "react";
 import { DEFAULT_PAGE_SIZE } from "../constants";
 import { ArrowLeft, Check, SkipForward } from "lucide-react";
 import {
-  getPromptEval, listPromptEvalItemsPaged, submitPromptEvalVerdict,
-  type PromptEvalDetail, type PromptEvalItem,
+  getPromptEval, listPromptEvalItemsPaged, submitPromptEvalVerdict, getPromptEvalStats,
+  type PromptEvalDetail, type PromptEvalItem, type PromptEvalStats,
 } from "../api/client";
 import { Badge, Button, EmptyState, Pagination } from "../ui";
 import { toastError, toastSuccess } from "../toast";
 import { navigate } from "../router";
+import { PromptEvalStatsView } from "../components/PromptEvalStatsView";
 
 const LETTERS = ["A", "B", "C", "D", "E", "F"];
 const BUCKETS = [{ k: "pending", label: "未评" }, { k: "evaluated", label: "已评" }, { k: "all", label: "全部" }];
@@ -22,6 +23,8 @@ export function PromptEvalWorkbench({ runId }: { runId: number }) {
   const [loading, setLoading] = useState(true);
   const [curId, setCurId] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState<"eval" | "stats">("eval");
+  const [stats, setStats] = useState<PromptEvalStats | null>(null);
 
   useEffect(() => { getPromptEval(runId).then(setRun).catch(() => toastError("加载失败")); }, [runId]);
   const reload = () => listPromptEvalItemsPaged(runId, { bucket, page, page_size: pageSize })
@@ -37,11 +40,23 @@ export function PromptEvalWorkbench({ runId }: { runId: number }) {
     if (next) setCurId(next.id);
   };
 
+  const openStats = () => { getPromptEvalStats(runId).then(setStats).catch(() => toastError("加载统计失败")); setView("stats"); };
+
   const submit = (b: { winner_arm_id?: number; all_bad?: boolean; is_good?: boolean }) => {
     if (!cur) return;
     setBusy(true);
     submitPromptEvalVerdict(cur.id, b)
-      .then(() => { toastSuccess("已评估"); reload(); goNext(); })
+      .then(async () => {
+        toastSuccess("已评估");
+        await reload();
+        // 标完最后一条 → 右侧直接展示统计结果
+        const st = await getPromptEvalStats(runId).catch(() => null);
+        if (st) {
+          setStats(st);
+          if (st.human.evaluated >= st.total) { setView("stats"); return; }
+        }
+        goNext();
+      })
       .catch(e => toastError(e?.response?.data?.detail ?? "提交失败"))
       .finally(() => setBusy(false));
   };
@@ -49,7 +64,7 @@ export function PromptEvalWorkbench({ runId }: { runId: number }) {
   return (
     <div>
       <div className="mb-4 flex items-center gap-3">
-        <Button variant="subtle" size="sm" onClick={() => navigate("/prompt-evals")}><ArrowLeft size={14} /> 返回</Button>
+        <Button variant="subtle" size="sm" onClick={() => navigate("/eval/prompt")}><ArrowLeft size={14} /> 返回</Button>
         <div className="text-[15px] font-semibold text-slate-800">{run?.name ?? `评测 #${runId}`} · 盲测评估</div>
       </div>
 
@@ -57,7 +72,7 @@ export function PromptEvalWorkbench({ runId }: { runId: number }) {
         <div className="flex w-72 shrink-0 flex-col rounded-xl ring-1 ring-slate-200">
           <div className="flex gap-1 border-b border-slate-100 p-2">
             {BUCKETS.map(b => (
-              <button key={b.k} onClick={() => { setBucket(b.k); setPage(1); setCurId(null); }}
+              <button key={b.k} onClick={() => { setBucket(b.k); setPage(1); setCurId(null); setView("eval"); }}
                 className={`rounded-md px-2 py-1 text-[12px] ${bucket === b.k ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-100"}`}>
                 {b.label}
               </button>
@@ -67,8 +82,8 @@ export function PromptEvalWorkbench({ runId }: { runId: number }) {
             {loading ? <div className="p-3 text-[12px] text-slate-400">加载中…</div> :
               items.length === 0 ? <div className="p-3 text-[12px] text-slate-400">无数据</div> :
                 items.map(i => (
-                  <button key={i.id} onClick={() => setCurId(i.id)}
-                    className={`block w-full border-b border-slate-50 px-3 py-2 text-left text-[13px] ${i.id === curId ? "bg-brand-50" : "hover:bg-slate-50"}`}>
+                  <button key={i.id} onClick={() => { setCurId(i.id); setView("eval"); }}
+                    className={`block w-full border-b border-slate-50 px-3 py-2 text-left text-[13px] ${i.id === curId && view === "eval" ? "bg-brand-50" : "hover:bg-slate-50"}`}>
                     <span className="text-slate-700">#{i.item_index + 1}</span>
                     {i.evaluated_at && <Check size={12} className="ml-2 inline text-emerald-500" />}
                     {i.ai_evaluated_at && <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] text-violet-600">AI</span>}
@@ -81,7 +96,22 @@ export function PromptEvalWorkbench({ runId }: { runId: number }) {
         </div>
 
         <div className="flex-1 overflow-auto rounded-xl ring-1 ring-slate-200 p-5">
-          {!cur ? <EmptyState title="选择左侧一条开始评估" /> : (
+          {/* 评估 / 统计 切换 */}
+          <div className="mb-4 flex gap-1">
+            <button onClick={() => setView("eval")}
+              className={`rounded-md px-3 py-1 text-[12.5px] ${view === "eval" ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-100"}`}>评估</button>
+            <button onClick={openStats}
+              className={`rounded-md px-3 py-1 text-[12.5px] ${view === "stats" ? "bg-slate-800 text-white" : "text-slate-500 hover:bg-slate-100"}`}>统计</button>
+          </div>
+
+          {view === "stats" ? (
+            !stats ? <p className="text-[13px] text-slate-400">加载统计中…</p> : (
+              <div className="flex flex-col gap-3">
+                <div className="text-[13px] text-slate-500">人工 {stats.human.evaluated} · AI {stats.ai.evaluated} / 共 {stats.total}</div>
+                <PromptEvalStatsView s={stats} />
+              </div>
+            )
+          ) : !cur ? <EmptyState title="选择左侧一条开始评估" /> : (
             <div className="flex flex-col gap-4">
               <div>
                 <div className="label mb-1.5">参数输入</div>
@@ -92,6 +122,11 @@ export function PromptEvalWorkbench({ runId }: { runId: number }) {
                 </div>
               </div>
 
+              {!single && (
+                <div className="-mb-1 text-[11.5px] text-slate-400">
+                  盲测:界面只显示 A / B / C(隐藏版本)。本轮内 A / B / C 固定对应同一候选(随机分配、不按版本号),所以「总选 A」= 始终选同一个;各版本表现见「统计」。
+                </div>
+              )}
               <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${single ? 1 : cur.outputs.length}, minmax(0, 1fr))` }}>
                 {cur.outputs.map((o, idx) => (
                   <div key={o.id} className="rounded-xl ring-1 ring-slate-200 p-3">
@@ -116,8 +151,23 @@ export function PromptEvalWorkbench({ runId }: { runId: number }) {
                   </>
                 )}
                 <Button variant="subtle" disabled={busy} onClick={goNext}><SkipForward size={14} /> 跳过</Button>
-                {cur.evaluated_at && <span className="ml-auto text-[12px] text-slate-400">已评 · {cur.annotated_by_name ?? "?"} · {cur.evaluated_at.slice(0, 19).replace("T", " ")}</span>}
               </div>
+              {cur.evaluated_at && (
+                <div className="rounded-xl bg-emerald-50 p-3 ring-1 ring-emerald-100">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded bg-emerald-600 px-1.5 py-0.5 text-[11px] font-medium text-white">人工评估</span>
+                    <span className="text-[12.5px] text-slate-600">
+                      {single
+                        ? (cur.is_good === true ? "判定:好" : cur.is_good === false ? "判定:坏" : "未判定")
+                        : (cur.all_bad ? "判定:都一样坏"
+                            : cur.winner_arm_id != null
+                              ? `选了 ${LETTERS[cur.outputs.findIndex(o => o.arm_id === cur.winner_arm_id)] ?? "?"} 更好`
+                              : "未判定")}
+                    </span>
+                    <span className="ml-auto text-[12px] text-slate-400">{cur.annotated_by_name ?? "?"} · {cur.evaluated_at.slice(0, 19).replace("T", " ")}</span>
+                  </div>
+                </div>
+              )}
               {cur.ai_evaluated_at && (
                 <div className="rounded-xl bg-violet-50 p-3 ring-1 ring-violet-100">
                   <div className="mb-1 flex items-center gap-2">

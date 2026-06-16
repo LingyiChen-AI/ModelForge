@@ -116,6 +116,31 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+function CodeTabs({ tabs }: { tabs: { key: string; label: string; code: string }[] }) {
+  const [active, setActive] = useState(tabs[0]?.key);
+  const current = tabs.find(t => t.key === active) ?? tabs[0];
+  return (
+    <div>
+      <div className="mb-1.5 flex items-center gap-1">
+        {tabs.map(t => (
+          <button
+            key={t.key}
+            onClick={() => setActive(t.key)}
+            className={`rounded-md px-2.5 py-1 text-[12px] font-medium cursor-pointer transition-colors ${
+              t.key === current.key
+                ? "bg-slate-800 text-white"
+                : "text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <CodeBlock code={current.code} />
+    </div>
+  );
+}
+
 function RuleCard({ rule }: { rule: any }) {
   const t: string = rule.task_type;
   const inputRows = (INPUT_FIELDS[t] ?? []).map(f => ({
@@ -136,8 +161,10 @@ function RuleCard({ rule }: { rule: any }) {
       </div>
       <div className="flex flex-col gap-4">
         <Section title="请求参数"><FieldTable rows={paramRows} firstCol="字段" /></Section>
-        <Section title="cURL 调用示例"><CodeBlock code={curlOf(rule)} /></Section>
-        <Section title="Python 接入代码"><CodeBlock code={pyOf(rule)} /></Section>
+        <CodeTabs tabs={[
+          { key: "curl", label: "cURL", code: curlOf(rule) },
+          { key: "python", label: "Python", code: pyOf(rule) },
+        ]} />
         <Section title="响应字段(data)"><FieldTable rows={RESPONSE_FIELDS} firstCol="字段" /></Section>
       </div>
     </div>
