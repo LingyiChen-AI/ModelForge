@@ -1,5 +1,5 @@
 # E2E 冒烟(需 docker compose 全开 + worker 运行)
-1. 启动 worker: cd services/train-worker && celery -A worker.celery_app worker -c 1 -l info
+1. 启动 worker: cd services/ml-worker && celery -A worker.celery_app worker -c 1 -l info
 2. 启动 app:    cd services/app-server && uvicorn app.main:app --port 8000
 3. 建分类数据集并上传 CSV(text,label,>=8 行两类)
 4. POST /training-jobs {dataset_version_id, base_model:"prajjwal1/bert-tiny",

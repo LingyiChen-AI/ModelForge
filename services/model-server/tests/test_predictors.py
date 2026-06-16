@@ -8,7 +8,7 @@ def test_build_predictor_unknown():
 
 @pytest.mark.slow
 def test_classification_predictor(tmp_path):
-    import sys; sys.path.insert(0, "/Users/chenhao/codes/myself/ModelForge/services/train-worker")
+    import sys; sys.path.insert(0, "/Users/chenhao/codes/myself/ModelForge/services/ml-worker")
     from worker.recipes.classification import ClassificationRecipe
     df = pd.DataFrame({"text": ["good","bad","great","awful"]*4, "label": ["pos","neg","pos","neg"]*4})
     ClassificationRecipe().train(df=df, base_model="prajjwal1/bert-tiny",

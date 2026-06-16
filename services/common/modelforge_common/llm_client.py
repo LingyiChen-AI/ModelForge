@@ -1,5 +1,5 @@
 """OpenAI 协议(/chat/completions)的最小 httpx 封装。
-app-server 用于设置页连通性测试,train-worker 在 Prompt 评测阶段复用。
+app-server 用于设置页连通性测试,ml-worker 在 Prompt 评测阶段复用。
 """
 from __future__ import annotations
 

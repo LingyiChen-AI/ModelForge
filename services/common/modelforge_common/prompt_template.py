@@ -1,5 +1,5 @@
 """{{ name }} 模板参数:抽取与语法校验。
-app-server 用于 Prompt 保存校验;train-worker 在 Prompt 评测阶段复用(render 留给子项目 C)。
+app-server 用于 Prompt 保存校验;ml-worker 在 Prompt 评测阶段复用(render 留给子项目 C)。
 """
 from __future__ import annotations
 
