@@ -23,7 +23,7 @@ ModelForge 是一个**小团队内部**使用的 NLP 模型训练与服务平台
 | `pair` | 句对 / 语义相似度 | HF `Trainer` / CoSENT | Spearman / Pearson |
 | `embedding` | 检索向量模型微调(BGE / m3e / gte) | sentence-transformers / FlagEmbedding,对比学习 | recall@k / MRR / nDCG(MTEB 式检索) |
 
-> **关键约束**:`embedding` 与其余三类训练范式不同(对比学习 + 难负样本挖掘 + 检索式评估)。架构必须把 `task_type` 作为一等公民,由 train-worker 按 recipe 分流。
+> **关键约束**:`embedding` 与其余三类训练范式不同(对比学习 + 难负样本挖掘 + 检索式评估)。架构必须把 `task_type` 作为一等公民,由 ml-worker 按 recipe 分流。
 
 ### 非目标(YAGNI)
 
@@ -35,10 +35,10 @@ ModelForge 是一个**小团队内部**使用的 NLP 模型训练与服务平台
 ## 2. 关键架构决策
 
 ### 决策 1:任务编排骨架 = Celery + Redis
-app-server 投递任务到 Redis,train-worker 作为 Celery worker 消费。GPU 并发由 worker concurrency 控制。理由:成熟、重试/超时/可观测现成,小团队部署成本低;单机/几台 GPU 场景不需要 K8s。
+app-server 投递任务到 Redis,ml-worker 作为 Celery worker 消费。GPU 并发由 worker concurrency 控制。理由:成熟、重试/超时/可观测现成,小团队部署成本低;单机/几台 GPU 场景不需要 K8s。
 
 ### 决策 2:评估在 worker 内进程批量推理
-评估任务也投递给 train-worker,直接 load 模型权重做 batch 推理算指标。理由:快、准、无网络开销,模型只 load 一次,复用 GPU 调度。**model-server 专注在线部署**,不参与评估。职责清晰:worker = 离线批处理(训练 + 评估),model-server = 在线服务。
+评估任务也投递给 ml-worker,直接 load 模型权重做 batch 推理算指标。理由:快、准、无网络开销,模型只 load 一次,复用 GPU 调度。**model-server 专注在线部署**,不参与评估。职责清晰:worker = 离线批处理(训练 + 评估),model-server = 在线服务。
 
 ### 决策 3:模型版本复用 MLflow Model Registry
 版本号、stage 流转(none/staging/prod)、产物存储交给 MLflow。业务侧 `ModelVersion` 表只镜像关键字段(供查询和评估关联),不自建权重存储。
@@ -69,8 +69,8 @@ app-server 投递任务到 Redis,train-worker 作为 Celery worker 消费。GPU 
                           ▲                        │              └──────────────┘
                           │                        ▼                      ▲
                           │              ┌──────────────────────┐         │
-                          │              │ train-worker (Celery) │────────┘
-                          │              │ GPU机器 · 训练+评估    │
+                          │              │ ml-worker (Celery)    │────────┘
+                          │              │ GPU · 训练/评估/打分   │
                           │              │ HF Trainer / ST·Flag  │
                           │              └──────────┬────────────┘
                           │                         │ log metrics / register model
@@ -92,7 +92,7 @@ app-server 投递任务到 Redis,train-worker 作为 Celery worker 消费。GPU 
 |---|---|
 | 前端 | React + TypeScript + Vite;组件库 Ant Design(数据后台)或 shadcn/ui;TanStack Query 数据请求 |
 | app-server | FastAPI + SQLAlchemy + Alembic + Pydantic;Celery 客户端 |
-| train-worker | Celery worker + HuggingFace Transformers/Trainer + sentence-transformers + FlagEmbedding + datasets;MLflow client |
+| ml-worker | Celery worker + HuggingFace Transformers/Trainer + sentence-transformers + FlagEmbedding + datasets;MLflow client |
 | model-server | FastAPI + transformers/sentence-transformers 运行时;启动从 MLflow Registry 拉权重 |
 | 基础设施 | PostgreSQL、Redis、MinIO(S3 兼容)、MLflow(后端共用同一 PG + MinIO artifact store) |
 
@@ -101,7 +101,7 @@ app-server 投递任务到 Redis,train-worker 作为 Celery worker 消费。GPU 
 | 服务 | 职责 | 不负责 |
 |---|---|---|
 | **app-server** | 认证、CRUD、版本管理、任务编排、对前端 API | 不跑训练/推理 |
-| **train-worker** | 离线批处理:训练 + 评估(GPU) | 不对外提供 HTTP |
+| **ml-worker** | 离线批处理:训练 + 评估 + Prompt 评测 + 打分(GPU) | 不对外提供 HTTP |
 | **model-server** | 在线推理服务 | 不做训练/评估 |
 | **MLflow** | 实验跟踪 + 模型注册表 + 产物存储 | 不存业务关系数据 |
 
@@ -153,7 +153,7 @@ Deployment          — 在线部署
 
 ### 6.1 训练流程
 1. 前端选 数据集版本 + base_model + task_type + 超参 → app-server 建 `TrainingJob`,投 Celery 任务。
-2. train-worker 消费:从 MinIO 拉数据集快照 → 按 `task_type` 分流 recipe:
+2. ml-worker 消费:从 MinIO 拉数据集快照 → 按 `task_type` 分流 recipe:
    - classification/ner/pair → HF `Trainer`
    - embedding → (可选)难负挖掘 → sentence-transformers/FlagEmbedding 对比学习
 3. 训练中 metrics/params 实时写 MLflow;完成后权重注册到 MLflow Registry。
@@ -194,7 +194,7 @@ Deployment          — 在线部署
 ## 9. 测试策略
 
 - app-server:pytest + 测试 PG(testcontainers / sqlite 兜底),覆盖 CRUD、版本快照、任务投递。
-- train-worker:每类 task_type 的 recipe 用极小数据集跑通(冒烟训练),指标计算单测。
+- ml-worker:每类 task_type 的 recipe 用极小数据集跑通(冒烟训练),指标计算单测。
 - model-server:加载 + 推理端点契约测试。
 - 端到端:小数据集走 训练 → 注册 → 评估 → 部署 → 推理 全链路冒烟。
 
