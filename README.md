@@ -1,8 +1,23 @@
 # ModelForge
 
+> 💬 **社区交流**:[linux.do](https://linux.do/)
+>
+> 📦 **项目地址 / 下载**:[github.com/LingyiChen-AI/ModelForge](https://github.com/LingyiChen-AI/ModelForge)
+
 小团队内部使用的 **NLP 模型训练与服务平台**,围绕 BERT 架构类编码器模型(**不做大模型微调,不做图像**)。提供训练集/评估集管理与版本管理、训练流程、评估流程、模型版本管理、在线推理部署,以及面向大模型应用的 **Prompt 评测**(调用外部 LLM API 做盲测人工评估 + AI 自动评估,**仍不微调大模型**)。
 
 ![ModelForge 架构总览](images/architecture.png)
+
+## 为什么做 ModelForge(痛点)
+
+小团队做 NLP,常卡在这几件事上:
+
+- **大模型不总是最优解,成本却很高**:很多场景用小模型就能又快又省、可本地化、低延迟离线跑 —— 比如**情感识别、意图分类、文本/多标签分类、命名实体识别(NER)、句子/语义相似度、检索召回**。每个都甩给大模型 API,既贵又慢,还得联网。
+- **通用 / 开源模型在你的领域不够准**:尤其是 **embedding 向量模型**,通用权重在垂直语料上召回总差一截,需要拿自己的数据**微调**才好用 —— 而微调这件事本身门槛就高。
+- **自建「训练 → 评估 → 上线」流程太碎**:数据清洗、版本管理、训练、指标评估、模型版本、在线部署、坏例回流…… 每一步都要自己拼脚本、搭环境,缺一个**一站式**平台。
+- **Prompt 效果对比根本不好做**:换个 Prompt、换个模型,到底变好还是变坏?现在多半靠**肉眼比对 + 手写脚本跑批**,没有盲测(易被版本偏见带偏)、没有统一指标、结果难复现也难沉淀。
+
+**ModelForge 就是来收掉这些痛点的**:把 **小模型一站式微调**(数据 → 训练 → 评估 → 部署 → Badcase 闭环)和 **大模型 Prompt 评测**(盲测人工 + AI 自动评估)两条链路,做进同一个平台。
 
 ## 功能
 
@@ -155,6 +170,13 @@ ModelForge/
 
 ## 快速开始
 
+### 0. 克隆项目
+
+```bash
+git clone https://github.com/LingyiChen-AI/ModelForge.git
+cd ModelForge
+```
+
 ### 1. 启动基础设施
 
 ```bash
@@ -287,3 +309,7 @@ model-server(默认 `:8001`)推理端点:`POST /load`、`POST /predict`、`POST 
 后续可做(均超出当前范围):per-sample 评估明细落盘、部署灰度/多副本、更细的 RBAC/配额、大数据集增量版本、Badcase 自动触发再训练。
 
 详见实现计划:[基础地基](docs/superpowers/plans/2026-06-13-modelforge-foundation.md)、[评估流程](docs/superpowers/plans/2026-06-13-modelforge-evaluation.md)、[recipes](docs/superpowers/plans/2026-06-13-modelforge-recipes.md)、[在线部署](docs/superpowers/plans/2026-06-13-modelforge-deployment.md)。
+
+## 开源协议
+
+本项目基于 [Apache License 2.0](LICENSE) 开源。
