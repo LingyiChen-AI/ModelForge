@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class PromptEvalCreate(BaseModel):
@@ -8,6 +8,7 @@ class PromptEvalCreate(BaseModel):
     prompt_version_ids: list[int] = []
     model_ids: list[int] = []
     dataset_version_ids: list[int] = []
+    concurrency: int = Field(20, ge=5, le=100)   # 调用大模型的并发数(发起评测时填,5–100)
 
 
 class ArmOut(BaseModel):
@@ -27,6 +28,8 @@ class PromptEvalOut(BaseModel):
     eval_type: str
     status: str
     progress: float
+    ai_status: str | None = None
+    ai_progress: float = 0.0
     prompt_version_ids: list[int] = []
     model_ids: list[int] = []
     dataset_version_ids: list[int] = []
@@ -85,3 +88,4 @@ class VerdictIn(BaseModel):
 
 class AiEvaluateIn(BaseModel):
     model_id: int
+    concurrency: int = Field(20, ge=5, le=100)   # AI 评判调用大模型的并发数(5–100)

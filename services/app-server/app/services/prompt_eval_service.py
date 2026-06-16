@@ -85,7 +85,7 @@ def create_and_dispatch(db: Session, body, created_by=None) -> PromptEvalRun:
         run.arms.append(PromptEvalArm(arm_index=idx, prompt_version_id=pv_id, model_id=m_id,
                                       label=_label(db, pv_id, m_id, body.eval_type)))
     db.add(run); db.commit(); db.refresh(run)
-    run.celery_task_id = send_prompt_eval_task(run.id)
+    run.celery_task_id = send_prompt_eval_task(run.id, getattr(body, "concurrency", 20))
     db.commit(); db.refresh(run)
     return run
 

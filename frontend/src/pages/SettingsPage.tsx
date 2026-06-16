@@ -4,7 +4,7 @@ import { SlidersHorizontal, Plus, Trash2, FlaskConical, X, Power } from "lucide-
 import {
   listLlmProvidersPaged, createLlmProvider, updateLlmProvider, deleteLlmProvider,
   addLlmModel, deleteLlmModel, testLlmModel,
-  getAiEvalPrompt, setAiEvalPrompt,
+  getAiEvalPrompt, setAiEvalPrompt, resetAiEvalPrompt,
   type LlmProvider, type LlmTestResult,
 } from "../api/client";
 import {
@@ -12,10 +12,14 @@ import {
   PageHeader, Pagination, TableShell, Creator, CreatedAt,
 } from "../ui";
 import { toastError, toastSuccess } from "../toast";
+import { useAuth } from "../context/AuthContext";
 
 type TestState = Record<number, "loading" | LlmTestResult>;
 
 export function SettingsPage() {
+  const { can } = useAuth();
+  const canLlm = can("llm:manage");           // LLM 供应商配置(管理员)
+  const canAi = can("prompteval:annotate");   // AI 评判 Prompt(谁评测谁配)
   const [items, setItems] = useState<LlmProvider[]>([]);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -36,7 +40,10 @@ export function SettingsPage() {
 
   const reload = () => listLlmProvidersPaged({ page, page_size: pageSize })
     .then(res => { setItems(res.items); setTotal(res.total); });
-  useEffect(() => { setLoading(true); reload().finally(() => setLoading(false)); }, [page, pageSize]);
+  useEffect(() => {
+    if (!canLlm) { setLoading(false); return; }
+    setLoading(true); reload().finally(() => setLoading(false));
+  }, [page, pageSize, canLlm]);
 
   const openNew = () => {
     setEdit(null); setName(""); setBaseUrl(""); setApiKey(""); setModelIds([""]);
@@ -93,9 +100,10 @@ export function SettingsPage() {
       <PageHeader
         title="设置"
         subtitle="配置 OpenAI 协议的大模型供应商(下挂多个 model-id),供 Prompt 评测选用。"
-        actions={<Button variant="primary" onClick={openNew}><Plus size={16} /> 新建供应商</Button>}
+        actions={canLlm ? <Button variant="primary" onClick={openNew}><Plus size={16} /> 新建供应商</Button> : undefined}
       />
 
+      {canLlm && <>
       <TableShell
         loading={loading}
         empty={items.length === 0}
@@ -108,26 +116,26 @@ export function SettingsPage() {
             <td className="font-medium text-slate-800">{p.name}</td>
             <td><Mono>{p.base_url}</Mono></td>
             <td><Mono>{p.masked_key}</Mono></td>
-            <td className="wrap">
-              <div className="flex flex-col gap-1.5">
+            <td className="min-w-[300px]">
+              <div className="flex flex-col gap-2">
                 {p.models.map(m => {
                   const st = tests[m.id];
                   return (
-                    <div key={m.id} className="flex flex-col gap-1">
-                      <div className="flex items-center gap-2">
-                        <Mono>{m.model_id}</Mono>
-                        <Button size="sm" loading={st === "loading"} onClick={() => runTest(m.id)}>
-                          <FlaskConical size={12} /> 测试
-                        </Button>
-                        <button onClick={() => removeModel(m.id)} className="text-slate-400 hover:text-red-500" title="删除该 model">
-                          <X size={13} />
-                        </button>
-                      </div>
+                    <div key={m.id} className="flex items-center gap-2 rounded-lg bg-slate-50/70 px-2 py-1 ring-1 ring-slate-100">
+                      <span className="whitespace-nowrap font-mono text-[12.5px] text-slate-700">{m.model_id}</span>
+                      <Button size="sm" loading={st === "loading"} onClick={() => runTest(m.id)}>
+                        <FlaskConical size={12} /> 测试
+                      </Button>
                       {st && st !== "loading" && (
-                        <div className={`text-[12px] ${st.ok ? "text-emerald-600" : "text-red-600"}`}>
-                          {st.ok ? `✓ ${st.reply}` : `✗ ${st.error}`}<span className="ml-1 text-slate-400">{st.latency_ms}ms</span>
-                        </div>
+                        <span
+                          className={`whitespace-nowrap text-[12px] font-medium ${st.ok ? "text-emerald-600" : "text-red-500"}`}
+                          title={st.ok ? `回复:${st.reply}` : (st.error ?? "")}>
+                          {st.ok ? "✓ 连通" : "✗ 失败"} · {st.latency_ms}ms
+                        </span>
                       )}
+                      <button onClick={() => removeModel(m.id)} className="ml-auto text-slate-300 hover:text-red-500" title="删除该 model">
+                        <X size={14} />
+                      </button>
                     </div>
                   );
                 })}
@@ -151,9 +159,11 @@ export function SettingsPage() {
         ))}
       </TableShell>
       <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={s => { setPageSize(s); setPage(1); }} />
+      </>}
 
-      <AiEvalPromptCard />
+      {canAi && <AiEvalPromptCard />}
 
+      {canLlm && <>
       <Drawer
         open={open}
         onClose={() => setOpen(false)}
@@ -199,25 +209,42 @@ export function SettingsPage() {
         onCancel={() => setDel(null)}
         onConfirm={doDelete}
       />
+      </>}
     </>
   );
 }
 
 function AiEvalPromptCard() {
   const [value, setValue] = useState("");
+  const [isCustom, setIsCustom] = useState(false);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { getAiEvalPrompt().then(setValue).catch(() => {}); }, []);
+  const [resetBusy, setResetBusy] = useState(false);
+  useEffect(() => { getAiEvalPrompt().then(r => { setValue(r.value); setIsCustom(r.is_custom); }).catch(() => {}); }, []);
   const save = () => {
     setBusy(true);
-    setAiEvalPrompt(value).then(() => toastSuccess("已保存")).catch(() => toastError("保存失败")).finally(() => setBusy(false));
+    setAiEvalPrompt(value)
+      .then(r => { setValue(r.value); setIsCustom(r.is_custom); toastSuccess("已保存"); })
+      .catch(() => toastError("保存失败")).finally(() => setBusy(false));
+  };
+  const restore = () => {
+    setResetBusy(true);
+    resetAiEvalPrompt()
+      .then(r => { setValue(r.value); setIsCustom(r.is_custom); toastSuccess("已还原默认"); })
+      .catch(() => toastError("还原失败")).finally(() => setResetBusy(false));
   };
   return (
     <div className="mt-8 rounded-2xl bg-white p-6 ring-1 ring-slate-200/70">
-      <div className="mb-1 text-[15px] font-semibold text-slate-800">AI 评估 Prompt</div>
-      <p className="mb-3 text-[12.5px] text-slate-500">AI 自动评估时给评判模型的系统指令。要求模型只输出 JSON(多候选选 winner 序号 / all_bad;单候选 good 真假)。</p>
-      <textarea value={value} onChange={e => setValue(e.target.value)} rows={8}
+      <div className="mb-1 flex items-center gap-2">
+        <span className="text-[15px] font-semibold text-slate-800">AI 评估 Prompt</span>
+        <Badge tone={isCustom ? "blue" : "gray"}>{isCustom ? "已自定义" : "默认"}</Badge>
+      </div>
+      <p className="mb-3 text-[12.5px] text-slate-500">AI 自动评估时给评判模型的系统指令,<b>按用户隔离</b>:你改了就用你的,不影响别人;可一键还原默认。要求模型只输出 JSON(多候选选 winner 序号 / all_bad;单候选 good 真假)。</p>
+      <textarea value={value} onChange={e => setValue(e.target.value)} rows={10}
         className="w-full rounded-lg bg-white px-3 py-2 text-sm text-slate-900 ring-1 ring-slate-200 outline-none focus:ring-2 focus:ring-brand-500 font-mono" />
-      <div className="mt-3 flex justify-end"><Button variant="primary" loading={busy} onClick={save}>保存</Button></div>
+      <div className="mt-3 flex items-center justify-end gap-2">
+        <Button variant="subtle" disabled={!isCustom} loading={resetBusy} onClick={restore}>还原默认</Button>
+        <Button variant="primary" loading={busy} onClick={save}>保存</Button>
+      </div>
     </div>
   );
 }
@@ -225,10 +252,11 @@ function AiEvalPromptCard() {
 function AddModelInline({ onAdd }: { onAdd: (mid: string) => void }) {
   const [v, setV] = useState("");
   return (
-    <div className="flex items-center gap-2 pt-1">
-      <Input value={v} onChange={e => setV(e.target.value)} placeholder="新增 model-id" className="h-7 w-40 text-[12px]"
+    <div className="flex items-center gap-2 pt-0.5">
+      <Input value={v} onChange={e => setV(e.target.value)} placeholder="新增 model-id" className="h-7 w-44 text-[12px]"
              onKeyDown={e => { if (e.key === "Enter") { onAdd(v); setV(""); } }} />
-      <button onClick={() => { onAdd(v); setV(""); }} className="text-[12px] text-brand-600 hover:underline">添加</button>
+      <button onClick={() => { onAdd(v); setV(""); }}
+              className="shrink-0 whitespace-nowrap text-[12px] font-medium text-brand-600 hover:underline">添加</button>
     </div>
   );
 }

@@ -22,7 +22,7 @@ const NAV: NavItem[] = [
   { href: "/users", label: "用户", icon: <Users size={18} />, perm: "user:manage", match: p => p.startsWith("/users") },
   { href: "/roles", label: "角色", icon: <ShieldCheck size={18} />, perm: "role:manage", match: p => p.startsWith("/roles") },
   { href: "/api-keys", label: "API Key", icon: <KeyRound size={18} />, perm: "apikey:manage", match: p => p.startsWith("/api-keys") },
-  { href: "/settings", label: "设置", icon: <SlidersHorizontal size={18} />, perm: "llm:manage", match: p => p.startsWith("/settings") },
+  { href: "/settings", label: "设置", icon: <SlidersHorizontal size={18} />, perms: ["llm:manage", "prompteval:annotate"], match: p => p.startsWith("/settings") },
 ];
 
 function initials(name: string) {

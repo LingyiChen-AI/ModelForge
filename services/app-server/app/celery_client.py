@@ -16,12 +16,13 @@ def send_eval_task(eval_run_id: int) -> str:
 
 from modelforge_common.task_names import PROMPT_EVAL_TASK
 
-def send_prompt_eval_task(run_id: int) -> str:
-    result = _celery.send_task(PROMPT_EVAL_TASK, args=[run_id])
+def send_prompt_eval_task(run_id: int, concurrency: int = 20) -> str:
+    result = _celery.send_task(PROMPT_EVAL_TASK, args=[run_id, concurrency])
     return result.id
 
 from modelforge_common.task_names import PROMPT_AI_EVAL_TASK
 
-def send_prompt_ai_eval_task(run_id: int, model_id: int, judge_prompt: str) -> str:
-    result = _celery.send_task(PROMPT_AI_EVAL_TASK, args=[run_id, model_id, judge_prompt])
+def send_prompt_ai_eval_task(run_id: int, model_id: int, judge_prompt: str,
+                             concurrency: int = 20) -> str:
+    result = _celery.send_task(PROMPT_AI_EVAL_TASK, args=[run_id, model_id, judge_prompt, concurrency])
     return result.id

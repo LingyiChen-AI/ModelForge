@@ -161,8 +161,10 @@ def eval_task(self, eval_run_id: int):
             except Exception:
                 pass
         metrics = run_evaluator(run["task_type"], model_dir, df, on_progress=on_progress)
+        # 逐条预测从 metrics 取出单独落库,避免污染展示用的聚合指标。
+        predictions = metrics.pop("predictions", None)
         set_eval_progress(engine, eval_run_id, 1.0)
-        set_eval_status(engine, eval_run_id, JobStatus.SUCCEEDED, results=metrics)
+        set_eval_status(engine, eval_run_id, JobStatus.SUCCEEDED, results=metrics, predictions=predictions)
         return {"eval_run_id": eval_run_id, "metrics": metrics}
     except Exception as e:
         set_eval_status(engine, eval_run_id, JobStatus.FAILED, error=str(e))
@@ -170,10 +172,10 @@ def eval_task(self, eval_run_id: int):
 
 
 @celery_app.task(name=PROMPT_EVAL_TASK, bind=True)
-def prompt_eval_task(self, run_id: int):
+def prompt_eval_task(self, run_id: int, concurrency: int = 20):
     engine = build_engine()
     try:
-        run_prompt_eval(engine, run_id)
+        run_prompt_eval(engine, run_id, concurrency)
     except Exception as e:
         from worker.db import set_prompt_eval_status
         from modelforge_common.enums import JobStatus
@@ -183,7 +185,12 @@ def prompt_eval_task(self, run_id: int):
 
 
 @celery_app.task(name=PROMPT_AI_EVAL_TASK, bind=True)
-def prompt_ai_eval_task(self, run_id: int, model_id: int, judge_prompt: str):
+def prompt_ai_eval_task(self, run_id: int, model_id: int, judge_prompt: str, concurrency: int = 20):
     engine = build_engine()
-    run_prompt_ai_eval(engine, run_id, model_id, judge_prompt)
+    try:
+        run_prompt_ai_eval(engine, run_id, model_id, judge_prompt, concurrency)
+    except Exception as e:
+        from worker.db import set_ai_eval_status
+        set_ai_eval_status(engine, run_id, "failed", error=str(e))
+        raise
     return {"run_id": run_id}

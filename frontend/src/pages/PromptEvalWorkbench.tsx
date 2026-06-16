@@ -81,14 +81,19 @@ export function PromptEvalWorkbench({ runId }: { runId: number }) {
           <div className="flex-1 overflow-auto">
             {loading ? <div className="p-3 text-[12px] text-slate-400">加载中…</div> :
               items.length === 0 ? <div className="p-3 text-[12px] text-slate-400">无数据</div> :
-                items.map(i => (
-                  <button key={i.id} onClick={() => { setCurId(i.id); setView("eval"); }}
-                    className={`block w-full border-b border-slate-50 px-3 py-2 text-left text-[13px] ${i.id === curId && view === "eval" ? "bg-brand-50" : "hover:bg-slate-50"}`}>
-                    <span className="text-slate-700">#{i.item_index + 1}</span>
-                    {i.evaluated_at && <Check size={12} className="ml-2 inline text-emerald-500" />}
-                    {i.ai_evaluated_at && <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] text-violet-600">AI</span>}
-                  </button>
-                ))}
+                items.map(i => {
+                  const raw = Object.values(i.inputs ?? {}).map(v => String(v ?? "")).join(" ").trim();
+                  const preview = raw.length > 10 ? raw.slice(0, 10) + "…" : raw;
+                  return (
+                    <button key={i.id} onClick={() => { setCurId(i.id); setView("eval"); }} title={raw}
+                      className={`block w-full border-b border-slate-50 px-3 py-2 text-left text-[13px] ${i.id === curId && view === "eval" ? "bg-brand-50" : "hover:bg-slate-50"}`}>
+                      <span className="text-slate-400">#{i.item_index + 1}</span>
+                      {preview && <span className="ml-2 text-slate-700">{preview}</span>}
+                      {i.evaluated_at && <Check size={12} className="ml-2 inline text-emerald-500" />}
+                      {i.ai_evaluated_at && <span className="ml-1 rounded bg-violet-100 px-1 text-[10px] text-violet-600">AI</span>}
+                    </button>
+                  );
+                })}
           </div>
           <div className="border-t border-slate-100 p-2">
             <Pagination page={page} pageSize={pageSize} total={total} onPage={setPage} onPageSize={s => { setPageSize(s); setPage(1); }} />

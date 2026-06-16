@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_PAGE_SIZE } from "../constants";
-import { BarChart3, FlaskConical, Trash2 } from "lucide-react";
-import { listEvalRunsPaged, createEvalRun, deleteEvalRun, listModelVersions, listVersionOptions, type EvalRun, type ModelVersion, type VersionOption } from "../api/client";
+import { BarChart3, FlaskConical, Trash2, Download } from "lucide-react";
+import { listEvalRunsPaged, createEvalRun, deleteEvalRun, exportEvalPredictions, listModelVersions, listVersionOptions, type EvalRun, type ModelVersion, type VersionOption } from "../api/client";
 import { Button, ConfirmDialog, Drawer, EmptyState, Field, Mono, PageHeader, Pagination, Select, StatusBadge, TableShell, Creator, CreatedAt } from "../ui";
 import { toastError } from "../toast";
 import { MetricChips as Metrics } from "../components/MetricChips";
@@ -70,7 +70,7 @@ export function EvalPage() {
       <TableShell
         loading={loading}
         empty={runs.length === 0}
-        head={<><th className="w-14">#</th><th>模型</th><th>测试集</th><th>状态</th><th className="w-36">进度</th><th>指标</th><th>创建者</th><th className="w-36">创建时间</th><th className="w-12 text-right"></th></>}
+        head={<><th className="w-14">#</th><th>模型</th><th>测试集</th><th>状态</th><th className="w-36">进度</th><th>指标</th><th>创建者</th><th className="w-36">创建时间</th><th className="w-24 text-right"></th></>}
       >
         {runs.length === 0 ? (
           <EmptyState icon={<BarChart3 size={22} />} title="还没有测试记录" hint="点击右上角「发起测试」选择模型与测试集版本。" />
@@ -102,7 +102,10 @@ export function EvalPage() {
             <td><Creator name={r.created_by_name} /></td>
             <td><CreatedAt at={r.created_at} /></td>
             <td className="text-right">
-              {can("eval:run") && <Button size="sm" variant="danger" onClick={() => setDel(r)}><Trash2 size={13} /></Button>}
+              <div className="flex items-center justify-end gap-1.5">
+                {r.has_predictions && <Button size="sm" variant="subtle" title="导出预测结果" onClick={() => exportEvalPredictions(r.id).catch(() => toastError("导出失败"))}><Download size={13} /></Button>}
+                {can("eval:run") && <Button size="sm" variant="danger" onClick={() => setDel(r)}><Trash2 size={13} /></Button>}
+              </div>
             </td>
           </tr>
         ))}

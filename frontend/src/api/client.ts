@@ -129,7 +129,7 @@ export const listModelVersions = () => api.get<ModelVersion[]>("/model-versions"
 export const setModelStage = (id: number, stage: string) =>
   api.patch<ModelVersion>(`/model-versions/${id}`, { stage }).then(r => r.data);
 
-export type EvalRun = { id: number; model_version_id: number; model_name: string | null; model_version_label: string | null; dataset_version_id: number; dataset_name: string | null; dataset_version_no: number | null; status: string; progress: number; results: Record<string, number>; error: string | null; created_at: string; created_by_name: string | null };
+export type EvalRun = { id: number; model_version_id: number; model_name: string | null; model_version_label: string | null; dataset_version_id: number; dataset_name: string | null; dataset_version_no: number | null; status: string; progress: number; results: Record<string, number>; error: string | null; has_predictions: boolean; created_at: string; created_by_name: string | null };
 export const listEvalRuns = (datasetVersionId?: number) =>
   api.get<EvalRun[]>("/eval-runs", { params: datasetVersionId ? { dataset_version_id: datasetVersionId } : {} }).then(r => r.data);
 export const listEvalRunsPaged = (p: { page: number; page_size: number; dataset_version_id?: number }) =>
@@ -137,6 +137,10 @@ export const listEvalRunsPaged = (p: { page: number; page_size: number; dataset_
 export const createEvalRun = (b: { model_version_id: number; dataset_version_id: number }) =>
   api.post<EvalRun>("/eval-runs", b).then(r => r.data);
 export const deleteEvalRun = (id: number) => api.delete(`/eval-runs/${id}`).then(r => r.data);
+export async function exportEvalPredictions(runId: number) {
+  const res = await api.get(`/eval-runs/${runId}/predictions.xlsx`, { responseType: "blob" });
+  triggerBlobDownload(res.data as Blob, `eval_${runId}_predictions.xlsx`);
+}
 
 export type Deployment = { id: number; model_version_id: number; status: string; endpoint: string | null; error: string | null; created_at: string; created_by_name: string | null };
 export const listDeployments = () => api.get<Deployment[]>("/deployments").then(r => r.data);
@@ -266,6 +270,7 @@ export const validatePrompt = (b: { system_prompt: string; user_prompt: string }
 export type PromptEvalArmRow = { id: number; arm_index: number; prompt_version_id: number; model_id: number; label: string };
 export type PromptEval = {
   id: number; name: string; eval_type: string; status: string; progress: number;
+  ai_status: string | null; ai_progress: number;
   prompt_version_ids: number[]; model_ids: number[]; dataset_version_ids: number[];
   compare_to_version_id: number | null; created_by_name: string | null; created_at: string;
 };
@@ -287,7 +292,7 @@ export type PromptEvalOptions = {
 export const listPromptEvalsPaged = (p: { page: number; page_size: number }) =>
   getPaginated<PromptEval>("/prompt-evals", p);
 export const getPromptEvalOptions = () => api.get<PromptEvalOptions>("/prompt-evals/options").then(r => r.data);
-export const createPromptEval = (b: { eval_type: string; name: string; prompt_version_ids: number[]; model_ids: number[]; dataset_version_ids: number[] }) =>
+export const createPromptEval = (b: { eval_type: string; name: string; prompt_version_ids: number[]; model_ids: number[]; dataset_version_ids: number[]; concurrency: number }) =>
   api.post<PromptEvalDetail>("/prompt-evals", b).then(r => r.data);
 export const getPromptEval = (id: number) => api.get<PromptEvalDetail>(`/prompt-evals/${id}`).then(r => r.data);
 export const listPromptEvalItemsPaged = (id: number, p: { bucket?: string; page: number; page_size: number }) =>
@@ -307,7 +312,13 @@ export type PromptEvalStats = {
   human: PromptEvalMetrics; ai: PromptEvalMetrics;
 };
 export const getPromptEvalStats = (id: number) => api.get<PromptEvalStats>(`/prompt-evals/${id}/stats`).then(r => r.data);
-export const getAiEvalPrompt = () => api.get<{ value: string }>("/settings/ai-eval-prompt").then(r => r.data.value);
-export const setAiEvalPrompt = (value: string) => api.put<{ value: string }>("/settings/ai-eval-prompt", { value }).then(r => r.data.value);
-export const triggerAiEval = (runId: number, modelId: number) =>
-  api.post<{ dispatched: boolean }>(`/prompt-evals/${runId}/ai-evaluate`, { model_id: modelId }).then(r => r.data);
+export type AiEvalPrompt = { value: string; is_custom: boolean };
+export const getAiEvalPrompt = () => api.get<AiEvalPrompt>("/settings/ai-eval-prompt").then(r => r.data);
+export const setAiEvalPrompt = (value: string) => api.put<AiEvalPrompt>("/settings/ai-eval-prompt", { value }).then(r => r.data);
+export const resetAiEvalPrompt = () => api.delete<AiEvalPrompt>("/settings/ai-eval-prompt").then(r => r.data);
+export const triggerAiEval = (runId: number, modelId: number, concurrency: number) =>
+  api.post<{ dispatched: boolean }>(`/prompt-evals/${runId}/ai-evaluate`, { model_id: modelId, concurrency }).then(r => r.data);
+export async function exportPromptEvalResults(runId: number) {
+  const res = await api.get(`/prompt-evals/${runId}/results.xlsx`, { responseType: "blob" });
+  triggerBlobDownload(res.data as Blob, `prompt_eval_${runId}_results.xlsx`);
+}

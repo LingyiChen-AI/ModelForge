@@ -12,7 +12,7 @@ class NEREvaluator(Evaluator):
         id2tag = {i: t for t, i in tag2id.items()}
         tok = AutoTokenizer.from_pretrained(model_dir)
         model = AutoModelForTokenClassification.from_pretrained(model_dir); model.eval()
-        true, pred = [], []
+        true, pred, predictions = [], [], []
         n = len(df)
         for _i, (tokens, tags) in enumerate(zip(df["tokens"], df["tags"])):
             # parquet/np may hand back ndarray rows; the fast tokenizer only accepts plain list[str]
@@ -30,10 +30,15 @@ class NEREvaluator(Evaluator):
                     t_seq.append(tags[wid]); p_seq.append(id2tag[int(p[idx])])
                 prev = wid
             true.append(t_seq); pred.append(p_seq)
+            # 逐条预测:token 序列 + 真实/预测标注序列 + 整句是否完全一致。
+            predictions.append({"row": _i, "input": " ".join(tokens),
+                                "expected": " ".join(t_seq), "predicted": " ".join(p_seq),
+                                "correct": bool(t_seq == p_seq)})
             if on_progress and (_i % 5 == 0 or _i == n - 1):
                 try: on_progress((_i + 1) / max(1, n))
                 except Exception: pass
         return {"accuracy": float(accuracy_score(true, pred)),
                 "precision": float(precision_score(true, pred)),
                 "recall": float(recall_score(true, pred)),
-                "f1": float(f1_score(true, pred)), "n_samples": int(len(df))}
+                "f1": float(f1_score(true, pred)), "n_samples": int(len(df)),
+                "predictions": predictions}

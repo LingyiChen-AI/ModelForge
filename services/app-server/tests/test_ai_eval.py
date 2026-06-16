@@ -26,11 +26,14 @@ def test_ai_eval_service_prompt_and_dispatch(session_factory, monkeypatch):
     import app.services.ai_eval_service as svc
     from app.ai_eval_defaults import DEFAULT_AI_EVAL_PROMPT
     db = session_factory()
-    assert svc.get_prompt(db) == DEFAULT_AI_EVAL_PROMPT
-    svc.set_prompt(db, "我的评判指令")
-    assert svc.get_prompt(db) == "我的评判指令"
-    svc.set_prompt(db, "v2")
-    assert svc.get_prompt(db) == "v2"
+    # per-user 隔离 + 一键还原
+    assert svc.get_prompt(db, 7) == DEFAULT_AI_EVAL_PROMPT and svc.is_custom(db, 7) is False
+    svc.set_prompt(db, 7, "我的评判指令")
+    assert svc.get_prompt(db, 7) == "我的评判指令" and svc.is_custom(db, 7) is True
+    assert svc.get_prompt(db, 8) == DEFAULT_AI_EVAL_PROMPT   # 用户 8 不受用户 7 影响
+    svc.reset_prompt(db, 7)
+    assert svc.get_prompt(db, 7) == DEFAULT_AI_EVAL_PROMPT and svc.is_custom(db, 7) is False
+    svc.set_prompt(db, 7, "v2")
 
     from app.models.llm import LlmProvider, LlmModel
     from app.models.prompt_eval import PromptEvalRun
@@ -41,12 +44,12 @@ def test_ai_eval_service_prompt_and_dispatch(session_factory, monkeypatch):
     db.refresh(prov); db.refresh(run)
     sent = {}
     monkeypatch.setattr(svc, "send_prompt_ai_eval_task",
-                        lambda rid, mid, jp: sent.update(rid=rid, mid=mid, jp=jp) or "celery-ai-1")
-    svc.dispatch(db, run.id, prov.models[0].id)
+                        lambda rid, mid, jp, c=20: sent.update(rid=rid, mid=mid, jp=jp, c=c) or "celery-ai-1")
+    svc.dispatch(db, run.id, prov.models[0].id, 7)
     assert sent["rid"] == run.id and sent["mid"] == prov.models[0].id and sent["jp"] == "v2"
     import pytest
     with pytest.raises(ValueError):
-        svc.dispatch(db, run.id, 999999)
+        svc.dispatch(db, run.id, 999999, 7)
 
 
 from fastapi.testclient import TestClient
@@ -69,12 +72,17 @@ def test_settings_and_trigger_api(session_factory, monkeypatch):
     admin = make_user(db, codes=("llm:manage", "prompteval:read", "prompteval:annotate"), data_scope="all", email="ad@x.com")
     H = auth_headers(admin.id); db.close()
     from app.main import app
-    monkeypatch.setattr(svc, "send_prompt_ai_eval_task", lambda rid, mid, jp: "celery-ai-1")
+    monkeypatch.setattr(svc, "send_prompt_ai_eval_task", lambda rid, mid, jp, c=20: "celery-ai-1")
     c = TestClient(app)
     g = c.get("/settings/ai-eval-prompt", headers=H).json()
-    assert "JSON" in g["value"]
+    assert "JSON" in g["value"] and g["is_custom"] is False
     assert c.put("/settings/ai-eval-prompt", json={"value": "改过了"}, headers=H).status_code == 200
-    assert c.get("/settings/ai-eval-prompt", headers=H).json()["value"] == "改过了"
+    g2 = c.get("/settings/ai-eval-prompt", headers=H).json()
+    assert g2["value"] == "改过了" and g2["is_custom"] is True
+    # 一键还原 → 回默认、is_custom=false
+    assert c.delete("/settings/ai-eval-prompt", headers=H).status_code == 200
+    g3 = c.get("/settings/ai-eval-prompt", headers=H).json()
+    assert "JSON" in g3["value"] and g3["is_custom"] is False
     assert c.post(f"/prompt-evals/{rid}/ai-evaluate", json={"model_id": mid}, headers=H).status_code == 200
     assert c.post(f"/prompt-evals/{rid}/ai-evaluate", json={"model_id": 999999}, headers=H).status_code == 422
     items = c.get(f"/prompt-evals/{rid}/items", headers=H).json()

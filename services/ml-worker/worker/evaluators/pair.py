@@ -15,6 +15,13 @@ class PairEvaluator(Evaluator):
         y = np.array(_targets(df), dtype=float)
         sp = spearmanr(preds, y).correlation if len(set(y.tolist())) > 1 else 0.0
         pe = pearsonr(preds, y)[0] if len(set(y.tolist())) > 1 else 0.0
+        # 逐条预测(回归任务:真实/预测相似度分数,无对错列)。
+        predictions = [
+            {"row": i, "text_a": a[i], "text_b": b[i],
+             "expected_score": round(float(y[i]), 4), "predicted_score": round(float(preds[i]), 4)}
+            for i in range(len(a))
+        ]
         return {"spearman": float(sp if sp == sp else 0.0),
                 "pearson": float(pe if pe == pe else 0.0),
-                "mse": float(np.mean((preds - y) ** 2)), "n_samples": int(len(df))}
+                "mse": float(np.mean((preds - y) ** 2)), "n_samples": int(len(df)),
+                "predictions": predictions}

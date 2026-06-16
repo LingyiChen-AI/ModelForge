@@ -67,7 +67,7 @@ def _seed_prompt_and_dataset(db):
 
 def test_service_validation_and_arms(session_factory, monkeypatch):
     import app.services.prompt_eval_service as svc
-    monkeypatch.setattr(svc, "send_prompt_eval_task", lambda rid: "celery-1")
+    monkeypatch.setattr(svc, "send_prompt_eval_task", lambda rid, c=20: "celery-1")
     db = session_factory()
     p, model, dv = _seed_prompt_and_dataset(db)
     v1, v2 = p.versions[0].id, p.versions[1].id
@@ -96,7 +96,7 @@ def test_service_validation_and_arms(session_factory, monkeypatch):
 
 def test_service_missing_param(session_factory, monkeypatch):
     import app.services.prompt_eval_service as svc
-    monkeypatch.setattr(svc, "send_prompt_eval_task", lambda rid: "c")
+    monkeypatch.setattr(svc, "send_prompt_eval_task", lambda rid, c=20: "c")
     from app.models.prompt import Prompt, PromptVersion
     from app.models.llm import LlmProvider, LlmModel
     from app.models.dataset import Dataset, DatasetVersion
@@ -131,7 +131,7 @@ def _client(session_factory, codes):
 
 def test_prompt_eval_api(session_factory, monkeypatch):
     import app.services.prompt_eval_service as svc
-    monkeypatch.setattr(svc, "send_prompt_eval_task", lambda rid: "celery-1")
+    monkeypatch.setattr(svc, "send_prompt_eval_task", lambda rid, c=20: "celery-1")
     db = session_factory()
     p, model, dv = _seed_prompt_and_dataset(db)
     v1, v2, mid, dvid = p.versions[0].id, p.versions[1].id, model.id, dv.id

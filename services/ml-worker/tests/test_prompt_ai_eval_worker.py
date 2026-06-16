@@ -3,7 +3,8 @@ from sqlalchemy import create_engine, text
 
 def _setup(engine):
     with engine.begin() as c:
-        c.execute(text("CREATE TABLE prompt_eval_runs (id INTEGER PRIMARY KEY, eval_type TEXT)"))
+        c.execute(text("CREATE TABLE prompt_eval_runs (id INTEGER PRIMARY KEY, eval_type TEXT, "
+                       "ai_status TEXT, ai_progress REAL, ai_error TEXT)"))
         c.execute(text("CREATE TABLE prompt_eval_arms (id INTEGER PRIMARY KEY, run_id INTEGER, arm_index INTEGER)"))
         c.execute(text("CREATE TABLE prompt_eval_items (id INTEGER PRIMARY KEY, run_id INTEGER, inputs TEXT, "
                        "ai_winner_arm_id INTEGER, ai_all_bad INTEGER, ai_is_good INTEGER, ai_model_id INTEGER, "
@@ -13,7 +14,7 @@ def _setup(engine):
         c.execute(text("CREATE TABLE llm_providers (id INTEGER PRIMARY KEY, base_url TEXT, api_key TEXT)"))
         c.execute(text("INSERT INTO llm_providers VALUES (1,'http://u','k')"))
         c.execute(text("INSERT INTO llm_models VALUES (9,1,'judge-x')"))
-        c.execute(text("INSERT INTO prompt_eval_runs VALUES (1,'multi_prompt')"))
+        c.execute(text("INSERT INTO prompt_eval_runs (id, eval_type) VALUES (1,'multi_prompt')"))
         c.execute(text("INSERT INTO prompt_eval_arms VALUES (10,1,0)"))
         c.execute(text("INSERT INTO prompt_eval_arms VALUES (11,1,1)"))
         c.execute(text("INSERT INTO prompt_eval_items (id,run_id,inputs) VALUES (100,1,'{\"q\":\"x\"}')"))

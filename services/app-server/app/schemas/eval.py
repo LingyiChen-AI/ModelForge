@@ -19,6 +19,7 @@ class EvalRunOut(BaseModel):
     celery_task_id: str | None
     results: dict
     error: str | None
+    has_predictions: bool = False
     created_at: datetime
     created_by_name: str | None = None
     class Config: from_attributes = True

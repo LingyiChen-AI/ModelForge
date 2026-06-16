@@ -13,6 +13,7 @@ from app.schemas.prompt_eval import PromptEvalCreate, PromptEvalOut, PromptEvalD
 from app.services import prompt_eval_service as svc
 from app.services import prompt_eval_stats
 from app.services import ai_eval_service
+from app.services import export_service
 from app.pagination import paginate
 
 router = APIRouter(prefix="/prompt-evals", tags=["prompt-evals"])
@@ -116,9 +117,9 @@ def submit_verdict(item_id: int, body: VerdictIn,
 
 @router.post("/{run_id}/ai-evaluate")
 def ai_evaluate(run_id: int, body: AiEvaluateIn,
-                _: User = Depends(require("prompteval:annotate")), db: Session = Depends(get_db)):
+                user: User = Depends(require("prompteval:annotate")), db: Session = Depends(get_db)):
     try:
-        ai_eval_service.dispatch(db, run_id, body.model_id)
+        ai_eval_service.dispatch(db, run_id, body.model_id, user.id, body.concurrency)
     except ValueError as e:
         raise HTTPException(422, str(e))
     return {"dispatched": True}
@@ -130,3 +131,13 @@ def get_stats(run_id: int, _: User = Depends(require("prompteval:read")), db: Se
     if s is None:
         raise HTTPException(404, "run not found")
     return s
+
+
+@router.get("/{run_id}/results.xlsx")
+def export_results(run_id: int, _: User = Depends(require("prompteval:read")), db: Session = Depends(get_db)):
+    run = db.get(PromptEvalRun, run_id)
+    if not run:
+        raise HTTPException(404, "run not found")
+    data = export_service.prompt_eval_xlsx(db, run)
+    return Response(content=data, media_type=export_service.XLSX_MEDIA,
+                    headers={"Content-Disposition": f'attachment; filename="prompt_eval_{run_id}_results.xlsx"'})

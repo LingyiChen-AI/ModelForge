@@ -1,4 +1,5 @@
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from modelforge_common.llm_client import chat as llm_chat, LLMError
 from modelforge_common.prompt_template import render
 from worker.storage import read_snapshot
@@ -13,7 +14,7 @@ def _clean(v):
     return None if isinstance(v, float) and v != v else v
 
 
-def run_prompt_eval(engine, run_id: int) -> None:
+def run_prompt_eval(engine, run_id: int, concurrency: int = 20) -> None:
     set_prompt_eval_status(engine, run_id, JobStatus.RUNNING)
     set_prompt_eval_progress(engine, run_id, 0.02)
     run = load_prompt_eval_run(engine, run_id)
@@ -33,9 +34,12 @@ def run_prompt_eval(engine, run_id: int) -> None:
                 out_id = insert_eval_output(engine, item_id, arm["id"])
                 work.append((out_id, arm, inputs))
 
-    # 2) 逐个 output 调 LLM
+    # 2) 并发调 LLM —— IO 密集,用线程池;并发数发起评测时填入(5–100)。
+    #    LLM 调用在子线程,DB 写(结果 + 进度)统一回主线程串行,避免连接池压力;单条失败隔离不影响其余。
+    concurrency = max(5, min(100, int(concurrency or 20)))
     total = len(work) or 1
-    for i, (out_id, arm, inputs) in enumerate(work):
+
+    def _call(out_id, arm, inputs):
         t0 = time.monotonic()
         try:
             messages = []
@@ -43,13 +47,22 @@ def run_prompt_eval(engine, run_id: int) -> None:
             if sys_text.strip():
                 messages.append({"role": "system", "content": sys_text})
             messages.append({"role": "user", "content": render(arm["user_prompt"] or "", inputs)})
-            res = llm_chat(arm["base_url"], arm["api_key"], arm["model_str"], messages)
-            set_output_result(engine, out_id, status="done", output_text=res.content,
-                              latency_ms=int((time.monotonic() - t0) * 1000))
+            # 超时/网络/429/5xx 自动重试(指数退避),timeout 放宽到 60s(推理模型生成慢)
+            res = llm_chat(arm["base_url"], arm["api_key"], arm["model_str"], messages,
+                           timeout=60.0, retries=2)
+            return out_id, "done", res.content, None, int((time.monotonic() - t0) * 1000)
         except LLMError as e:
-            set_output_result(engine, out_id, status="error", error=e.message,
-                              latency_ms=int((time.monotonic() - t0) * 1000))
-        set_prompt_eval_progress(engine, run_id, 0.05 + 0.93 * ((i + 1) / total))
+            return out_id, "error", "", e.message, int((time.monotonic() - t0) * 1000)
+
+    done = 0
+    with ThreadPoolExecutor(max_workers=min(concurrency, total)) as ex:
+        futures = [ex.submit(_call, o, a, i) for (o, a, i) in work]
+        for fut in as_completed(futures):
+            out_id, status, text, err, latency = fut.result()
+            set_output_result(engine, out_id, status=status, output_text=text or "",
+                              error=err, latency_ms=latency)
+            done += 1
+            set_prompt_eval_progress(engine, run_id, 0.05 + 0.93 * (done / total))
 
     set_prompt_eval_progress(engine, run_id, 1.0)
     set_prompt_eval_status(engine, run_id, JobStatus.SUCCEEDED)

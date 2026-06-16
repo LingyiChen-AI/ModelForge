@@ -80,13 +80,17 @@ def load_job(engine: Engine, job_id: int) -> dict:
 
 
 def set_eval_status(engine: Engine, eval_run_id: int, status: JobStatus,
-                    results: dict | None = None, error: str | None = None) -> None:
-    """Update eval run status in the database with optional results and error."""
+                    results: dict | None = None, error: str | None = None,
+                    predictions: list | None = None) -> None:
+    """Update eval run status in the database with optional results, predictions and error."""
     sets = ["status = :status"]
     params = {"status": status.value, "id": eval_run_id}
     if results is not None:
         sets.append("results = :res")
         params["res"] = json.dumps(results)
+    if predictions is not None:
+        sets.append("predictions = :preds")
+        params["preds"] = json.dumps(predictions)
     if error is not None:
         sets.append("error = :err")
         params["err"] = error
@@ -154,6 +158,22 @@ def set_prompt_eval_status(engine: Engine, run_id: int, status: JobStatus,
 def set_prompt_eval_progress(engine: Engine, run_id: int, progress: float) -> None:
     with engine.begin() as c:
         c.execute(text("UPDATE prompt_eval_runs SET progress = :p WHERE id = :id"),
+                  {"p": max(0.0, min(1.0, float(progress))), "id": run_id})
+
+
+def set_ai_eval_status(engine: Engine, run_id: int, status: str, error: str | None = None) -> None:
+    sets = ["ai_status = :s"]
+    params = {"s": status, "id": run_id}
+    if error is not None:
+        sets.append("ai_error = :e")
+        params["e"] = error
+    with engine.begin() as c:
+        c.execute(text(f"UPDATE prompt_eval_runs SET {', '.join(sets)} WHERE id = :id"), params)
+
+
+def set_ai_eval_progress(engine: Engine, run_id: int, progress: float) -> None:
+    with engine.begin() as c:
+        c.execute(text("UPDATE prompt_eval_runs SET ai_progress = :p WHERE id = :id"),
                   {"p": max(0.0, min(1.0, float(progress))), "id": run_id})
 
 

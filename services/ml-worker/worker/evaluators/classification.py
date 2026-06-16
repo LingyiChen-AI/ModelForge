@@ -29,4 +29,13 @@ class ClassificationEvaluator(Evaluator):
                "n_samples": int(len(df))}
         if unmapped:
             out["unknown_labels"] = unmapped  # rows whose 中文 label is outside the model's label space
+        # 逐条预测,供「导出预测结果表格」(worker 会把它从 metrics 里取出单独落库)。
+        id2label = {v: k for k, v in label2id.items()}
+        exp_label = df["label"].astype(str).tolist()
+        out["predictions"] = [
+            {"row": i, "input": texts[i], "expected": exp_label[i],
+             "predicted": id2label.get(int(pred[i]), str(int(pred[i]))),
+             "correct": bool(exp_label[i] == id2label.get(int(pred[i]), str(int(pred[i]))))}
+            for i in range(len(texts))
+        ]
         return out

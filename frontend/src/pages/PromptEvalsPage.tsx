@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { DEFAULT_PAGE_SIZE } from "../constants";
-import { ClipboardCheck, Plus, PencilLine, BarChart3, Sparkles } from "lucide-react";
+import { ClipboardCheck, Plus, PencilLine, BarChart3, Sparkles, Download } from "lucide-react";
 import {
   listPromptEvalsPaged, createPromptEval, getPromptEvalOptions, getPromptEvalStats, triggerAiEval,
+  exportPromptEvalResults,
   type PromptEval, type PromptEvalOptions, type PromptEvalStats,
 } from "../api/client";
 import {
@@ -41,11 +42,12 @@ function MultiCheck({ options, value, onChange }: {
 
 function NewEvalDrawer({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [opts, setOpts] = useState<PromptEvalOptions | null>(null);
-  const [evalType, setEvalType] = useState("multi_prompt");
+  const [evalType, setEvalType] = useState("multi_model");
   const [name, setName] = useState(tsName());
   const [pvs, setPvs] = useState<number[]>([]);
   const [models, setModels] = useState<number[]>([]);
   const [datasets, setDatasets] = useState<number[]>([]);
+  const [concurrency, setConcurrency] = useState(20);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => { getPromptEvalOptions().then(setOpts).catch(() => toastError("加载选项失败")); }, []);
@@ -54,20 +56,18 @@ function NewEvalDrawer({ onClose, onCreated }: { onClose: () => void; onCreated:
   const onType = (t: string) => {
     setEvalType(t);
     if (t === "multi_model") setPvs(p => single(p));
-    if (t === "multi_prompt" || t === "single_prompt") setModels(m => single(m));
-    if (t === "single_prompt") setPvs(p => single(p));
+    if (t === "single_prompt") { setModels(m => single(m)); setPvs(p => single(p)); }
   };
 
   const valid = (() => {
     if (datasets.length < 1 || !name.trim()) return false;
-    if (evalType === "multi_prompt") return pvs.length >= 2 && models.length === 1;
     if (evalType === "multi_model") return models.length >= 2 && pvs.length === 1;
     return pvs.length === 1 && models.length === 1;
   })();
 
   const submit = () => {
     setBusy(true);
-    createPromptEval({ eval_type: evalType, name, prompt_version_ids: pvs, model_ids: models, dataset_version_ids: datasets })
+    createPromptEval({ eval_type: evalType, name, prompt_version_ids: pvs, model_ids: models, dataset_version_ids: datasets, concurrency })
       .then(() => { onCreated(); onClose(); })
       .catch(e => toastError(e?.response?.data?.detail ?? "提交失败"))
       .finally(() => setBusy(false));
@@ -76,7 +76,7 @@ function NewEvalDrawer({ onClose, onCreated }: { onClose: () => void; onCreated:
   const pvOpts = opts?.prompt_versions ?? [];
   const modelOpts = opts?.models ?? [];
   const dsOpts = (opts?.prompt_datasets ?? []).map(d => ({ id: d.version_id, label: d.label }));
-  const promptSingle = evalType !== "multi_prompt";
+  const promptSingle = true;   // 已移除「多 Prompt 盲测」:Prompt 版本恒为单选(跨 prompt 参数可能不同,无法一起跑)
   const modelSingle = evalType !== "multi_model";
 
   return (
@@ -91,7 +91,6 @@ function NewEvalDrawer({ onClose, onCreated }: { onClose: () => void; onCreated:
       <div className="flex flex-col gap-4">
         <Field label="评测类型">
           <Select value={evalType} onChange={e => onType(e.target.value)}>
-            <option value="multi_prompt">多 Prompt 盲测(多 prompt × 1 模型)</option>
             <option value="multi_model">多模型盲测(1 prompt × 多模型)</option>
             <option value="single_prompt">单 Prompt 版本对比(1 prompt × 1 模型,对比上一版)</option>
           </Select>
@@ -108,7 +107,11 @@ function NewEvalDrawer({ onClose, onCreated }: { onClose: () => void; onCreated:
         </Field>
 
         <Field label={modelSingle ? "模型(选 1)" : "模型(多选 ≥2)"}>
-          {modelSingle ? (
+          {modelOpts.length === 0 ? (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-700 ring-1 ring-amber-100">
+              未配置模型 — 请先到「设置 → LLM 设置」添加供应商与模型。
+            </p>
+          ) : modelSingle ? (
             <Select value={models[0] ?? ""} onChange={e => setModels(e.target.value ? [Number(e.target.value)] : [])}>
               <option value="">选择模型…</option>
               {modelOpts.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
@@ -118,6 +121,11 @@ function NewEvalDrawer({ onClose, onCreated }: { onClose: () => void; onCreated:
 
         <Field label="Prompt 测试集(多选)">
           <MultiCheck options={dsOpts} value={datasets} onChange={setDatasets} />
+        </Field>
+
+        <Field label="并发数(调用大模型的并发,5–100)">
+          <Input type="number" min={5} max={100} value={concurrency}
+            onChange={e => setConcurrency(Math.max(5, Math.min(100, Number(e.target.value) || 20)))} />
         </Field>
       </div>
     </Drawer>
@@ -144,11 +152,11 @@ export function PromptEvalsPage() {
   return (
     <>
       <PageHeader title="Prompt 评测"
-        subtitle="发起多 Prompt / 多模型 / 单 Prompt 版本对比评测;跑完进入工作台盲测评估。"
+        subtitle="发起多模型盲测 / 单 Prompt 版本对比评测;跑完进入工作台盲测评估。"
         actions={<Button variant="primary" onClick={() => setOpen(true)}><Plus size={16} /> 新建评测</Button>} />
 
       <TableShell loading={loading} empty={items.length === 0}
-        head={<><th>名称</th><th>类型</th><th>状态</th><th>进度</th><th>创建者</th><th className="w-36">创建时间</th><th className="w-44 text-right"></th></>}>
+        head={<><th>名称</th><th>类型</th><th>状态</th><th>进度</th><th>AI 评估</th><th>创建者</th><th className="w-36">创建时间</th><th className="w-56 text-right"></th></>}>
         {items.length === 0 ? (
           <EmptyState icon={<ClipboardCheck size={22} />} title="还没有评测" hint="新建一个 Prompt 评测。" />
         ) : items.map(r => (
@@ -164,6 +172,18 @@ export function PromptEvalsPage() {
                 <span className="text-[12px] text-slate-500">{Math.round(r.progress * 100)}%</span>
               </div>
             </td>
+            <td>
+              {r.ai_status === "running" ? (
+                <div className="flex items-center gap-2">
+                  <div className="h-1.5 w-20 overflow-hidden rounded-full bg-violet-100">
+                    <div className="h-full bg-violet-500 transition-all" style={{ width: `${Math.round(r.ai_progress * 100)}%` }} />
+                  </div>
+                  <span className="text-[12px] text-violet-600">{Math.round(r.ai_progress * 100)}%</span>
+                </div>
+              ) : r.ai_status === "succeeded" ? <Badge tone="violet"><Sparkles size={10} /> 已评</Badge>
+                : r.ai_status === "failed" ? <Badge tone="red">失败</Badge>
+                : <span className="text-[13px] text-slate-300">—</span>}
+            </td>
             <td><Creator name={r.created_by_name} /></td>
             <td><CreatedAt at={r.created_at} /></td>
             <td className="text-right">
@@ -171,7 +191,10 @@ export function PromptEvalsPage() {
                 <div className="flex items-center justify-end gap-2">
                   <Button size="sm" variant="primary" onClick={() => navigate(`/eval/prompt/${r.id}/evaluate`)}><PencilLine size={13} /> 评估</Button>
                   <Button size="sm" onClick={() => setStatsId(r.id)}><BarChart3 size={13} /> 统计</Button>
-                  <Button size="sm" variant="subtle" onClick={() => setAiRun(r)}><Sparkles size={13} /> AI 评估</Button>
+                  <Button size="sm" variant="subtle" disabled={r.ai_status === "running"} onClick={() => setAiRun(r)}>
+                    <Sparkles size={13} /> {r.ai_status === "running" ? "AI 评估中" : "AI 评估"}
+                  </Button>
+                  <Button size="sm" variant="subtle" title="导出预测结果" onClick={() => exportPromptEvalResults(r.id).catch(() => toastError("导出失败"))}><Download size={13} /></Button>
                 </div>
               )}
             </td>
@@ -201,24 +224,37 @@ function StatsDrawer({ runId, onClose }: { runId: number; onClose: () => void })
 function AiEvalDrawer({ run, onClose }: { run: PromptEval; onClose: () => void }) {
   const [models, setModels] = useState<{ id: number; label: string }[]>([]);
   const [mid, setMid] = useState("");
+  const [concurrency, setConcurrency] = useState(20);
   const [busy, setBusy] = useState(false);
   useEffect(() => { getPromptEvalOptions().then(o => setModels(o.models)).catch(() => toastError("加载模型失败")); }, []);
   const go = () => {
     setBusy(true);
-    triggerAiEval(run.id, Number(mid))
-      .then(() => { toastSuccess("已发起 AI 评估,稍后刷新查看结果"); onClose(); })
+    triggerAiEval(run.id, Number(mid), concurrency)
+      .then(() => { toastSuccess("已发起 AI 评估,可在列表看进度"); onClose(); })
       .catch(e => toastError(e?.response?.data?.detail ?? "发起失败"))
       .finally(() => setBusy(false));
   };
   return (
     <Drawer open onClose={onClose} title="AI 自动评估" subtitle={`用评判模型对「${run.name}」未 AI 评的数据自动判优。`} width="max-w-md"
       footer={<div className="flex justify-end gap-2"><Button variant="subtle" disabled={busy} onClick={onClose}>取消</Button><Button variant="primary" disabled={!mid} loading={busy} onClick={go}><Sparkles size={15} /> 开始</Button></div>}>
-      <Field label="评判模型">
-        <Select value={mid} onChange={e => setMid(e.target.value)}>
-          <option value="">选择评判模型…</option>
-          {models.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-        </Select>
-      </Field>
+      <div className="flex flex-col gap-4">
+        <Field label="评判模型">
+          {models.length === 0 ? (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12.5px] text-amber-700 ring-1 ring-amber-100">
+              未配置模型 — 请先到「设置 → LLM 设置」添加供应商与模型。
+            </p>
+          ) : (
+            <Select value={mid} onChange={e => setMid(e.target.value)}>
+              <option value="">选择评判模型…</option>
+              {models.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+            </Select>
+          )}
+        </Field>
+        <Field label="并发数(调用评判模型的并发,5–100)">
+          <Input type="number" min={5} max={100} value={concurrency}
+            onChange={e => setConcurrency(Math.max(5, Math.min(100, Number(e.target.value) || 20)))} />
+        </Field>
+      </div>
     </Drawer>
   );
 }

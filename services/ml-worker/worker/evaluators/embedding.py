@@ -22,4 +22,14 @@ class EmbeddingEvaluator(Evaluator):
             hits = sum(1 for i, g in enumerate(gold) if g in ranks[i, :k].tolist())
             out[f"recall@{k}"] = float(hits / len(gold))
         out["n_samples"] = int(len(df))
+        # 逐条预测(检索任务:查询 + 标注正例 + 命中的 Top1 文本 + Top1 是否命中)。
+        kmax = max(ks)
+        predictions = []
+        for i, g in enumerate(gold):
+            top1 = int(ranks[i, 0])
+            predictions.append({"row": i, "query": queries[i],
+                                "expected": corpus[g], "predicted": corpus[top1],
+                                "correct": bool(top1 == g),
+                                f"命中Top{kmax}": bool(g in ranks[i, :kmax].tolist())})
+        out["predictions"] = predictions
         return out

@@ -14,6 +14,10 @@ class PromptEvalRun(Base, TimestampMixin, CreatorMixin):
     progress: Mapped[float] = mapped_column(default=0.0)
     celery_task_id: Mapped[str | None] = mapped_column(nullable=True)
     error: Mapped[str | None] = mapped_column(nullable=True)
+    # AI 自动评估的独立生命周期(与上面跑输出的 status/progress 并行):None=未评 / running / succeeded / failed
+    ai_status: Mapped[str | None] = mapped_column(nullable=True)
+    ai_progress: Mapped[float] = mapped_column(default=0.0)
+    ai_error: Mapped[str | None] = mapped_column(nullable=True)
     prompt_version_ids: Mapped[list] = mapped_column(JSON, default=list)
     model_ids: Mapped[list] = mapped_column(JSON, default=list)
     dataset_version_ids: Mapped[list] = mapped_column(JSON, default=list)

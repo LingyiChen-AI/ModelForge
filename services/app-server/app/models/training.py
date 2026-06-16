@@ -127,10 +127,16 @@ class EvalRun(Base, TimestampMixin, CreatorMixin):
     celery_task_id: Mapped[str | None] = mapped_column(nullable=True)
     results: Mapped[dict] = mapped_column(JSON, default=dict)
     per_sample_uri: Mapped[str | None] = mapped_column(nullable=True)
+    # 逐条预测(测试时由 worker 落库),元素 {row,input,expected,predicted,correct};供导出预测结果表格。
+    predictions: Mapped[list] = mapped_column(JSON, default=list)
     error: Mapped[str | None] = mapped_column(nullable=True)
     created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     model_version: Mapped["ModelVersion | None"] = relationship(lazy="selectin", foreign_keys=[model_version_id])
     dataset_version: Mapped["DatasetVersion | None"] = relationship(lazy="selectin", foreign_keys=[dataset_version_id])
+
+    @property
+    def has_predictions(self) -> bool:
+        return bool(self.predictions)
 
     @property
     def model_name(self) -> str | None:
